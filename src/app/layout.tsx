@@ -4,15 +4,15 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'SOCIAL SPY',
-    template: '%s | SOCIAL SPY',
+    default: 'BUZZ BASE',
+    template: '%s | BUZZ BASE',
   },
   description: '交流を、ゲームにする。交流会向けスパイ探し×交流ゲーム',
-  applicationName: 'SOCIAL SPY',
+  applicationName: 'BUZZ BASE',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
-    title: 'SOCIAL SPY',
+    title: 'BUZZ BASE',
     statusBarStyle: 'black-translucent',
   },
   formatDetection: { telephone: false, email: false, address: false },
