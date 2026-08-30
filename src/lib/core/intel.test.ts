@@ -29,7 +29,12 @@ describe('SPY情報の可視性', () => {
   });
 
   it('公開後は一般参加者にもSPY MISSIONの内容が表示される', () => {
-    for (const phase of ['SPY_MISSION_REVEALED', 'VOTING', 'IDENTITY_REVEALED', 'FINISHED'] as const) {
+    for (const phase of [
+      'SPY_MISSION_REVEALED',
+      'VOTING',
+      'IDENTITY_REVEALED',
+      'FINISHED',
+    ] as const) {
       const visible = visibleSpyMissions({
         phase,
         isSpy: false,
@@ -58,6 +63,7 @@ describe('参加者情報の公開', () => {
       eventId: 'ev1',
       displayName: '鈴木 玲奈',
       affiliation: 'スタートアップ / 広報',
+      loginId: null,
       role: 'SPY',
       joinedAt: '2026-01-01T00:00:00.000Z',
       createdAt: '2026-01-01T00:00:00.000Z',
