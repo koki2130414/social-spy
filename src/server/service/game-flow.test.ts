@@ -7,9 +7,11 @@ import { resetDemoState } from '@/server/repo/demo-repo';
 import { getRepo } from '@/server/repo';
 import {
   ADMIN_COOKIE,
+  PARTICIPANT_COOKIE,
   clearAdminSession,
   setAdminSession,
   setParticipantSession,
+  verifyJoinToken,
 } from '@/server/auth/session';
 import {
   DEMO_AGENT_PARTICIPANT_ID,
@@ -32,6 +34,7 @@ import {
   getAdminResult,
   getEvent,
   listAdminParticipants,
+  registerParticipant,
   requireAdmin,
 } from './admin';
 import { ServiceError } from '@/server/errors';
@@ -52,7 +55,9 @@ async function asSpy() {
 }
 
 /** 管理者としてフェーズを目的の段階まで進める */
-async function advanceTo(phase: 'ACTIVE' | 'SPY_MISSION_REVEALED' | 'VOTING' | 'IDENTITY_REVEALED') {
+async function advanceTo(
+  phase: 'ACTIVE' | 'SPY_MISSION_REVEALED' | 'VOTING' | 'IDENTITY_REVEALED',
+) {
   const order = ['ACTIVE', 'SPY_MISSION_REVEALED', 'VOTING', 'IDENTITY_REVEALED'] as const;
   await loginAdmin();
   for (const p of order) {
@@ -122,15 +127,15 @@ describe('MISSIONの達成', () => {
   it('LOBBY中や投票フェーズではMISSIONを更新できない', async () => {
     await asAgent();
     const state = await getGameState();
-    await expect(
-      setMissionCompleted(state.missions[0].assignmentId, true),
-    ).rejects.toMatchObject({ code: 'PHASE_LOCKED' });
+    await expect(setMissionCompleted(state.missions[0].assignmentId, true)).rejects.toMatchObject({
+      code: 'PHASE_LOCKED',
+    });
 
     await advanceTo('VOTING');
     await asAgent();
-    await expect(
-      setMissionCompleted(state.missions[0].assignmentId, true),
-    ).rejects.toMatchObject({ code: 'PHASE_LOCKED' });
+    await expect(setMissionCompleted(state.missions[0].assignmentId, true)).rejects.toMatchObject({
+      code: 'PHASE_LOCKED',
+    });
   });
 });
 
@@ -274,6 +279,77 @@ describe('イベントの新規作成', () => {
 
   it('管理者でなければイベントを作成できない', async () => {
     await expect(createEvent(newEvent)).rejects.toMatchObject({ code: 'NOT_AUTHENTICATED' });
+  });
+});
+
+describe('運営による参加者の代理登録', () => {
+  it('登録するとMISSIONが3件配られ、参加用リンクが発行される', async () => {
+    await loginAdmin();
+    const { participant, joinUrl } = await registerParticipant(DEMO_EVENT_ID, {
+      displayName: '事前登録 花子',
+      affiliation: '受付代行',
+    });
+
+    expect(participant.displayName).toBe('事前登録 花子');
+    expect(participant.role).toBe('AGENT');
+    const missions = await getRepo().listAssignedMissions(participant.id, 'GENERAL');
+    expect(missions).toHaveLength(3);
+
+    // 参加用リンクは /j/<署名付きトークン> の形
+    expect(joinUrl).toContain('/j/');
+    const token = joinUrl.split('/j/')[1];
+    expect(verifyJoinToken(token)).toMatchObject({
+      pid: participant.id,
+      eid: DEMO_EVENT_ID,
+    });
+  });
+
+  it('参加用リンクは改ざんすると無効になる', async () => {
+    await loginAdmin();
+    const { joinUrl } = await registerParticipant(DEMO_EVENT_ID, { displayName: '改ざん検証' });
+    const token = joinUrl.split('/j/')[1];
+
+    // 署名部分を1文字変える
+    const [payload, signature] = token.split('.');
+    const broken = `${payload}.${signature.slice(0, -1)}${signature.at(-1) === 'A' ? 'B' : 'A'}`;
+    expect(verifyJoinToken(broken)).toBeNull();
+
+    // 中身（参加者ID）を差し替えても、署名が合わないので通らない
+    const forged = Buffer.from(
+      JSON.stringify({ typ: 'join', pid: DEMO_SPY_PARTICIPANT_ID, eid: DEMO_EVENT_ID }),
+    ).toString('base64url');
+    expect(verifyJoinToken(`${forged}.${signature}`)).toBeNull();
+  });
+
+  it('参加者セッションのCookieとして参加用リンクのトークンは使えない', async () => {
+    await loginAdmin();
+    const { joinUrl } = await registerParticipant(DEMO_EVENT_ID, { displayName: '種別検証' });
+    const token = joinUrl.split('/j/')[1];
+
+    cookieJar.clear();
+    cookieJar.raw.set(PARTICIPANT_COOKIE, token);
+    await expect(getGameState()).rejects.toMatchObject({ code: 'NOT_AUTHENTICATED' });
+  });
+
+  it('同じ表示名は登録できない', async () => {
+    await loginAdmin();
+    await expect(
+      registerParticipant(DEMO_EVENT_ID, { displayName: '佐藤 悠真' }),
+    ).rejects.toMatchObject({ code: 'DUPLICATE_NAME' });
+  });
+
+  it('管理者でなければ代理登録できない', async () => {
+    await expect(
+      registerParticipant(DEMO_EVENT_ID, { displayName: '権限なし' }),
+    ).rejects.toMatchObject({ code: 'NOT_AUTHENTICATED' });
+  });
+
+  it('投票フェーズ以降は追加できない', async () => {
+    await advanceTo('VOTING');
+    await loginAdmin();
+    await expect(
+      registerParticipant(DEMO_EVENT_ID, { displayName: '遅刻者' }),
+    ).rejects.toMatchObject({ code: 'PHASE_NOT_ACCEPTING' });
   });
 });
 
