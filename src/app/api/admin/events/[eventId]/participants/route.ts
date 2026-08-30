@@ -20,9 +20,10 @@ export async function POST(request: Request, { params }: Ctx) {
   try {
     const { eventId } = await params;
     const body = await parseBody(request, participantCreateSchema);
-    const { participant, joinUrl } = await registerParticipant(eventId, {
+    const { participant, joinUrl, credentials } = await registerParticipant(eventId, {
       displayName: body.displayName,
       affiliation: body.affiliation || null,
+      loginId: body.loginId || null,
     });
     return ok(
       {
@@ -30,6 +31,9 @@ export async function POST(request: Request, { params }: Ctx) {
         displayName: participant.displayName,
         affiliation: participant.affiliation,
         joinUrl,
+        loginId: credentials.loginId,
+        // 平文パスワードを返すのはこの応答だけ。保存されるのはハッシュのみ
+        password: credentials.password,
       },
       201,
     );
