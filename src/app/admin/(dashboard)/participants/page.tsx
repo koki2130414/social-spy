@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Loader2, Search, Shuffle, UserRoundCog } from 'lucide-react';
+import { Copy, Loader2, Search, Shuffle, UserRoundCog, UserRoundPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,6 +40,7 @@ interface Row {
   hasVoted: boolean;
   votedFor: string | null;
   joinedAt: string;
+  joinUrl: string;
 }
 
 export default function AdminParticipantsPage() {
@@ -55,6 +56,10 @@ export default function AdminParticipantsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmAuto, setConfirmAuto] = useState(false);
   const [detail, setDetail] = useState<Row | null>(null);
+  const [newName, setNewName] = useState('');
+  const [newAffiliation, setNewAffiliation] = useState('');
+  const [added, setAdded] = useState<{ displayName: string; joinUrl: string } | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const rows = useMemo(() => {
     const list = data?.participants ?? [];
@@ -82,6 +87,38 @@ export default function AdminParticipantsPage() {
     } finally {
       setBusy(false);
       setConfirmAuto(false);
+    }
+  };
+
+  /** 運営が参加者を代理登録する */
+  const addParticipant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      const created = await apiSend<{ displayName: string; joinUrl: string }>(
+        `/api/admin/events/${eventId}/participants`,
+        { displayName: newName, affiliation: newAffiliation },
+      );
+      setAdded(created);
+      setNewName('');
+      setNewAffiliation('');
+      await refresh();
+    } catch (e2) {
+      setActionError(e2 instanceof ApiError ? e2.message : '参加者を追加できませんでした。');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyJoinUrl = async (row: Pick<Row, 'id' | 'joinUrl'>) => {
+    try {
+      await navigator.clipboard.writeText(row.joinUrl);
+      setCopiedId(row.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      setActionError('コピーできませんでした。リンクを長押しして選択してください。');
     }
   };
 
@@ -120,6 +157,63 @@ export default function AdminParticipantsPage() {
           {actionError}
         </p>
       ) : null}
+
+      {/* 運営による代理登録 */}
+      <section className="rounded-sm border border-border bg-card p-5">
+        <p className="label-mono">参加者を追加</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          登録するとMISSIONが3件配られ、その人専用の参加用リンクが発行されます。リンクを本人に渡してください。
+        </p>
+        <form onSubmit={addParticipant} className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+          <div className="space-y-1">
+            <Label htmlFor="new-name">名前</Label>
+            <Input
+              id="new-name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="例: 佐藤 悠真"
+              maxLength={24}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="new-aff">所属・肩書き（任意）</Label>
+            <Input
+              id="new-aff"
+              value={newAffiliation}
+              onChange={(e) => setNewAffiliation(e.target.value)}
+              placeholder="例: フリーランス / デザイナー"
+              maxLength={48}
+            />
+          </div>
+          <div className="flex items-end">
+            <Button type="submit" disabled={busy || !newName.trim()} className="w-full sm:w-auto">
+              <UserRoundPlus className="h-4 w-4" aria-hidden />
+              追加
+            </Button>
+          </div>
+        </form>
+
+        {added ? (
+          <div className="mt-4 rounded-sm border border-intel/50 bg-intel/10 p-3">
+            <p className="text-sm text-intel">
+              「{added.displayName}」を登録しました。この人専用の参加用リンクです。
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <code className="min-w-0 flex-1 break-all rounded-sm bg-background px-2 py-1 font-mono text-xs text-foreground">
+                {added.joinUrl}
+              </code>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => copyJoinUrl({ id: 'new', joinUrl: added.joinUrl })}
+              >
+                <Copy className="h-3.5 w-3.5" aria-hidden />
+                {copiedId === 'new' ? 'コピーしました' : 'コピー'}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </section>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1">
@@ -215,6 +309,15 @@ export default function AdminParticipantsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => copyJoinUrl(p)}
+                        title="この人専用の参加用リンクをコピー"
+                      >
+                        <Copy className="h-3.5 w-3.5" aria-hidden />
+                        {copiedId === p.id ? 'コピー済' : 'リンク'}
+                      </Button>
                       <Button size="sm" variant="outline" onClick={() => setDetail(p)}>
                         詳細
                       </Button>
@@ -248,7 +351,8 @@ export default function AdminParticipantsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>SPYを自動選出しますか？</AlertDialogTitle>
             <AlertDialogDescription>
-              現在の役割はすべてリセットされ、{event?.spyCount ?? 0}名がランダムにSPYへ設定されます。
+              現在の役割はすべてリセットされ、{event?.spyCount ?? 0}
+              名がランダムにSPYへ設定されます。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
