@@ -73,6 +73,22 @@ export const phaseSchema = z.object({
   to: z.enum(GAME_PHASES),
 });
 
+/** 運営が参加者を代理登録するときの入力 */
+export const participantCreateSchema = z.object({
+  displayName: z
+    .string()
+    .trim()
+    .min(1, '表示名を入力してください。')
+    .max(24, '表示名は24文字以内で入力してください。'),
+  affiliation: z
+    .string()
+    .trim()
+    .max(48, '所属・肩書きは48文字以内で入力してください。')
+    .optional()
+    .or(z.literal('')),
+});
+export type ParticipantCreateValues = z.infer<typeof participantCreateSchema>;
+
 export const spyAssignSchema = z.discriminatedUnion('mode', [
   z.object({ mode: z.literal('auto'), count: z.coerce.number().int().min(0).max(20).optional() }),
   z.object({
