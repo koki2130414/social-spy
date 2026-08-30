@@ -2,7 +2,7 @@ import { SpyLogo } from '@/components/spy/logo';
 import { ClassifiedPanel } from '@/components/spy/classified-panel';
 import { ReloadButton } from './reload-button';
 
-export const metadata = { title: 'オフライン | SOCIAL SPY' };
+export const metadata = { title: 'オフライン | BUZZ BASE' };
 
 /** Service Worker がオフライン時に返すフォールバック。静的に生成する */
 export default function OfflinePage() {
