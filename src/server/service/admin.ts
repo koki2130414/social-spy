@@ -18,7 +18,12 @@ import { computeResults } from '@/lib/core/vote';
 import { appMode, demoAdminCredentials, supabaseConfig } from '@/lib/env';
 import { getRepo } from '@/server/repo';
 import { ServiceError } from '@/server/errors';
-import { getAdminSession, setAdminSession, type AdminSession } from '@/server/auth/session';
+import {
+  clearAdminSession,
+  getAdminSession,
+  setAdminSession,
+  type AdminSession,
+} from '@/server/auth/session';
 import { DEMO_ADMIN_ID } from '@/server/demo/seed';
 import { sendPushToEvent } from '@/server/push/send';
 import type { EventInput, MissionInput } from '@/server/repo/types';
@@ -38,8 +43,15 @@ export async function requireAdmin(): Promise<AdminSession> {
     throw new ServiceError('NOT_AUTHENTICATED', '管理者としてログインしてください。', 401);
   }
   if (session.demo && appMode() !== 'demo') {
-    // デモ用セッションで本番データにアクセスさせない
-    throw new ServiceError('DEMO_SESSION_REJECTED', 'デモ用セッションでは操作できません。', 403);
+    // デモ用セッションで本番データにアクセスさせない。
+    // Supabaseを接続する前のCookieが残っているだけなので、そのまま捨てて
+    // ログインし直してもらう。401 を返すことで画面側がログインへ誘導する。
+    await clearAdminSession();
+    throw new ServiceError(
+      'NOT_AUTHENTICATED',
+      'デモ用のログイン情報が残っていました。もう一度ログインしてください。',
+      401,
+    );
   }
   return session;
 }
