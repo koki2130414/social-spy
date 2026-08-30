@@ -1,7 +1,15 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Copy, Loader2, Search, Shuffle, UserRoundCog, UserRoundPlus } from 'lucide-react';
+import {
+  Copy,
+  KeyRound,
+  Loader2,
+  Search,
+  Shuffle,
+  UserRoundCog,
+  UserRoundPlus,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,7 +47,16 @@ interface Row {
   total: number;
   hasVoted: boolean;
   votedFor: string | null;
+  loginId: string | null;
   joinedAt: string;
+  joinUrl: string;
+}
+
+/** 発行直後にだけ手元に出す認証情報。サーバーには平文を残さない */
+interface Issued {
+  displayName: string;
+  loginId: string;
+  password: string;
   joinUrl: string;
 }
 
@@ -58,7 +75,8 @@ export default function AdminParticipantsPage() {
   const [detail, setDetail] = useState<Row | null>(null);
   const [newName, setNewName] = useState('');
   const [newAffiliation, setNewAffiliation] = useState('');
-  const [added, setAdded] = useState<{ displayName: string; joinUrl: string } | null>(null);
+  const [newLoginId, setNewLoginId] = useState('');
+  const [added, setAdded] = useState<Issued | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const rows = useMemo(() => {
@@ -97,13 +115,15 @@ export default function AdminParticipantsPage() {
     setBusy(true);
     setActionError(null);
     try {
-      const created = await apiSend<{ displayName: string; joinUrl: string }>(
-        `/api/admin/events/${eventId}/participants`,
-        { displayName: newName, affiliation: newAffiliation },
-      );
+      const created = await apiSend<Issued>(`/api/admin/events/${eventId}/participants`, {
+        displayName: newName,
+        affiliation: newAffiliation,
+        loginId: newLoginId,
+      });
       setAdded(created);
       setNewName('');
       setNewAffiliation('');
+      setNewLoginId('');
       await refresh();
     } catch (e2) {
       setActionError(e2 instanceof ApiError ? e2.message : '参加者を追加できませんでした。');
@@ -112,13 +132,33 @@ export default function AdminParticipantsPage() {
     }
   };
 
-  const copyJoinUrl = async (row: Pick<Row, 'id' | 'joinUrl'>) => {
+  const copyText = async (key: string, text: string) => {
     try {
-      await navigator.clipboard.writeText(row.joinUrl);
-      setCopiedId(row.id);
+      await navigator.clipboard.writeText(text);
+      setCopiedId(key);
       setTimeout(() => setCopiedId(null), 2000);
     } catch {
-      setActionError('コピーできませんでした。リンクを長押しして選択してください。');
+      setActionError('コピーできませんでした。長押しして選択してください。');
+    }
+  };
+
+  const copyJoinUrl = (row: Pick<Row, 'id' | 'joinUrl'>) => copyText(row.id, row.joinUrl);
+
+  /** 参加者がパスワードを忘れたときに、その場で作り直す */
+  const resetPassword = async (row: Row) => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const issued = await apiSend<{ loginId: string; password: string }>(
+        `/api/admin/events/${eventId}/participants/${row.id}/password`,
+        {},
+      );
+      setAdded({ displayName: row.displayName, joinUrl: row.joinUrl, ...issued });
+      await refresh();
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : 'パスワードを再発行できませんでした。');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -162,9 +202,10 @@ export default function AdminParticipantsPage() {
       <section className="rounded-sm border border-border bg-card p-5">
         <p className="label-mono">参加者を追加</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          登録するとMISSIONが3件配られ、その人専用の参加用リンクが発行されます。リンクを本人に渡してください。
+          登録するとMISSIONが3件配られ、その人専用のID・パスワードと参加用リンクが発行されます。
+          受付でIDとパスワードを渡すか、リンクをそのまま送ってください。
         </p>
-        <form onSubmit={addParticipant} className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+        <form onSubmit={addParticipant} className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
           <div className="space-y-1">
             <Label htmlFor="new-name">名前</Label>
             <Input
@@ -185,6 +226,17 @@ export default function AdminParticipantsPage() {
               maxLength={48}
             />
           </div>
+          <div className="space-y-1">
+            <Label htmlFor="new-login-id">ID（空欄なら自動発行）</Label>
+            <Input
+              id="new-login-id"
+              value={newLoginId}
+              onChange={(e) => setNewLoginId(e.target.value)}
+              placeholder="例: sato-yuma"
+              className="font-mono"
+              maxLength={24}
+            />
+          </div>
           <div className="flex items-end">
             <Button type="submit" disabled={busy || !newName.trim()} className="w-full sm:w-auto">
               <UserRoundPlus className="h-4 w-4" aria-hidden />
@@ -194,23 +246,66 @@ export default function AdminParticipantsPage() {
         </form>
 
         {added ? (
-          <div className="mt-4 rounded-sm border border-intel/50 bg-intel/10 p-3">
+          <div className="mt-4 space-y-3 rounded-sm border border-intel/50 bg-intel/10 p-3">
             <p className="text-sm text-intel">
-              「{added.displayName}」を登録しました。この人専用の参加用リンクです。
+              「{added.displayName}」の認証情報です。
+              <strong className="text-foreground">
+                パスワードはこの画面でしか確認できません。
+              </strong>
+              本人に渡してから閉じてください。
             </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <code className="min-w-0 flex-1 break-all rounded-sm bg-background px-2 py-1 font-mono text-xs text-foreground">
-                {added.joinUrl}
-              </code>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => copyJoinUrl({ id: 'new', joinUrl: added.joinUrl })}
-              >
-                <Copy className="h-3.5 w-3.5" aria-hidden />
-                {copiedId === 'new' ? 'コピーしました' : 'コピー'}
-              </Button>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-1">
+                <p className="label-mono">ID</p>
+                <div className="flex items-center gap-2">
+                  <code className="min-w-0 flex-1 break-all rounded-sm bg-background px-2 py-1 font-mono text-sm text-foreground">
+                    {added.loginId}
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => copyText('new-id', added.loginId)}
+                  >
+                    <Copy className="h-3.5 w-3.5" aria-hidden />
+                    {copiedId === 'new-id' ? '済' : 'コピー'}
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="label-mono">PASSWORD</p>
+                <div className="flex items-center gap-2">
+                  <code className="min-w-0 flex-1 break-all rounded-sm bg-background px-2 py-1 font-mono text-sm text-foreground">
+                    {added.password}
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => copyText('new-pw', added.password)}
+                  >
+                    <Copy className="h-3.5 w-3.5" aria-hidden />
+                    {copiedId === 'new-pw' ? '済' : 'コピー'}
+                  </Button>
+                </div>
+              </div>
             </div>
+
+            <div className="space-y-1">
+              <p className="label-mono">参加用リンク（タップするだけで入れます）</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <code className="min-w-0 flex-1 break-all rounded-sm bg-background px-2 py-1 font-mono text-xs text-foreground">
+                  {added.joinUrl}
+                </code>
+                <Button size="sm" variant="outline" onClick={() => copyText('new', added.joinUrl)}>
+                  <Copy className="h-3.5 w-3.5" aria-hidden />
+                  {copiedId === 'new' ? 'コピーしました' : 'コピー'}
+                </Button>
+              </div>
+            </div>
+
+            <Button size="sm" variant="secondary" onClick={() => setAdded(null)}>
+              閉じる
+            </Button>
           </div>
         ) : null}
       </section>
@@ -274,6 +369,7 @@ export default function AdminParticipantsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>名前</TableHead>
+                <TableHead>ID</TableHead>
                 <TableHead>所属・肩書き</TableHead>
                 <TableHead>役割</TableHead>
                 <TableHead>MISSION</TableHead>
@@ -286,6 +382,9 @@ export default function AdminParticipantsPage() {
               {rows.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-medium text-foreground">{p.displayName}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {p.loginId ?? '-'}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{p.affiliation ?? '-'}</TableCell>
                   <TableCell>
                     {p.role === 'SPY' ? (
@@ -297,7 +396,7 @@ export default function AdminParticipantsPage() {
                   <TableCell className="font-mono text-intel">
                     {p.completed}/{p.total}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="whitespace-nowrap">
                     {p.hasVoted ? (
                       <Badge variant="intel">投票済み</Badge>
                     ) : (
@@ -318,6 +417,16 @@ export default function AdminParticipantsPage() {
                         <Copy className="h-3.5 w-3.5" aria-hidden />
                         {copiedId === p.id ? 'コピー済' : 'リンク'}
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => resetPassword(p)}
+                        title="パスワードを作り直して表示する"
+                      >
+                        <KeyRound className="h-3.5 w-3.5" aria-hidden />
+                        PW再発行
+                      </Button>
                       <Button size="sm" variant="outline" onClick={() => setDetail(p)}>
                         詳細
                       </Button>
@@ -336,7 +445,7 @@ export default function AdminParticipantsPage() {
               ))}
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                     該当する参加者がいません。
                   </TableCell>
                 </TableRow>
@@ -376,6 +485,7 @@ export default function AdminParticipantsPage() {
             <AlertDialogTitle>{detail?.displayName}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 pt-2 text-sm">
+                <p>ID: {detail?.loginId ?? '（未発行）'}</p>
                 <p>所属・肩書き: {detail?.affiliation ?? '-'}</p>
                 <p>役割: {detail?.role === 'SPY' ? 'SPY' : 'INFORMATION AGENT'}</p>
                 <p>
