@@ -6,6 +6,7 @@ import type {
   Participant,
   ParticipantRole,
   PhaseHistoryEntry,
+  PushSubscriptionRecord,
   SpyEvent,
   SpyNotification,
   Vote,
@@ -527,6 +528,49 @@ export class SupabaseRepo implements Repo {
       throw new Error(`insertVote: ${error.message}`);
     }
     return mapVote(unwrap(data, null, 'insertVote'));
+  }
+
+  /* ------------- push 通知 ---------------- */
+
+  async savePushSubscription(input: {
+    eventId: string;
+    participantId: string;
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+  }): Promise<void> {
+    const { error } = await this.db.from('push_subscriptions').upsert(
+      {
+        event_id: input.eventId,
+        participant_id: input.participantId,
+        endpoint: input.endpoint,
+        p256dh: input.p256dh,
+        auth: input.auth,
+      },
+      { onConflict: 'endpoint' },
+    );
+    if (error) throw new Error(`savePushSubscription: ${error.message}`);
+  }
+
+  async deletePushSubscription(endpoint: string): Promise<void> {
+    const { error } = await this.db.from('push_subscriptions').delete().eq('endpoint', endpoint);
+    if (error) throw new Error(`deletePushSubscription: ${error.message}`);
+  }
+
+  async listPushSubscriptions(eventId: string): Promise<PushSubscriptionRecord[]> {
+    const { data, error } = await this.db
+      .from('push_subscriptions')
+      .select('*')
+      .eq('event_id', eventId);
+    return unwrap(data, error, 'listPushSubscriptions').map((r: Row) => ({
+      id: r.id,
+      eventId: r.event_id,
+      participantId: r.participant_id,
+      endpoint: r.endpoint,
+      p256dh: r.p256dh,
+      auth: r.auth,
+      createdAt: r.created_at,
+    }));
   }
 
   /* ----------------- admin ---------------- */

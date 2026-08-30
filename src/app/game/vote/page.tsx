@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Loader2, Lock, UserRound } from 'lucide-react';
+import { CheckCircle2, Loader2, Lock, UserRound, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ClassifiedPanel } from '@/components/spy/classified-panel';
 import { useGame } from '@/components/spy/game-shell';
+import { useOnlineStatus } from '@/hooks/use-online-status';
 import { apiGet, apiSend, ApiError } from '@/lib/api';
 import { canVoteInPhase } from '@/lib/core/phase';
 import type { PublicParticipant } from '@/lib/types';
@@ -23,6 +24,7 @@ import { cn } from '@/lib/utils';
 
 export default function VotePage() {
   const { state, refresh } = useGame();
+  const online = useOnlineStatus();
   const [candidates, setCandidates] = useState<PublicParticipant[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -175,10 +177,16 @@ export default function VotePage() {
       )}
 
       <div className="sticky bottom-[68px] z-20 -mx-4 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
+        {!online ? (
+          <p className="mb-2 flex items-center gap-2 text-xs text-amber">
+            <WifiOff className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            オフラインのため投票できません。電波が戻ってから確定してください。
+          </p>
+        ) : null}
         <Button
           size="lg"
           className="w-full"
-          disabled={!selected || submitting}
+          disabled={!selected || submitting || !online}
           onClick={() => setConfirmOpen(true)}
         >
           投票を確認する

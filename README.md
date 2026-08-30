@@ -63,6 +63,64 @@ MISSION が3件自動配布されます（QRコード経由の場合はコード
 
 ---
 
+## PWA（アプリとして使う）
+
+ブラウザで開くだけでも使えますが、**ホーム画面に追加するとアプリとして動作**します。
+交流会の現場（電波が不安定・スマホを見る時間を短くしたい）を前提に作り込んでいます。
+
+### ホーム画面に追加
+
+- Android / デスクトップ Chrome … `/game` を開くと「ホーム画面に追加」バーが出ます（ワンタップ）
+- iPhone / Safari … 共有メニュー →「ホーム画面に追加」。アプリ内でも手順を案内します
+
+追加するとアドレスバーのない全画面で起動し、ノッチやホームバーを避けた表示になります。
+アイコン長押しのショートカットから MISSION / INTEL / VOTE へ直接飛べます。
+
+### 電波が切れても落ちない
+
+| 状況 | 挙動 |
+| --- | --- |
+| 通信断のままリロード | Service Worker がアプリの外枠を返すので、ブラウザのエラー画面にならず `SIGNAL LOST` 画面が出ます |
+| 使用中に通信断 | 画面はそのまま。上部に「オフラインです」のバーが出ます |
+| オフライン中に MISSION 達成 | 端末に保持して「未送信」と表示。**通信が戻ると自動送信**されます |
+| オフライン中に投票 | 受け付けません（確定性が重要なため）。理由を明示して止めます |
+
+同じ MISSION を何度押しても、送信は最後の状態1回にまとめられます。
+
+> **キャッシュの方針**: Service Worker は画面の外枠と静的ファイルだけをキャッシュし、
+> **APIレスポンスは一切キャッシュしません**。参加者の役割やSPY情報が端末の Cache Storage に
+> 残らないようにするためです。管理画面（`/admin`）もキャッシュ対象外です。
+
+### プッシュ通知
+
+`VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` を設定すると、参加者画面に「重要な通知を受け取る」が現れます。
+オンにすると次のタイミングで端末に通知が届き、タップすると該当画面が直接開きます。
+
+- OPERATION START（ゲーム開始）→ `/game/missions`
+- SPY MISSION REVEALED（SPY情報公開）→ `/game/intel`
+- OPERATION TERMINATED（投票開始）→ `/game/vote`
+- IDENTITY REVEAL（正体公開）→ `/game/result`
+- 運営が `/admin/notifications` から送った全体通知
+
+```bash
+npx web-push generate-vapid-keys      # 鍵を生成して .env.local に設定
+```
+
+未設定なら通知機能はUIごと自動的に隠れます。
+iOS は **ホーム画面に追加したうえで開いた場合のみ** 通知を購読できます（iOS 16.4以降）。
+その旨もアプリ内で案内します。
+
+### アイコンの差し替え
+
+```bash
+node scripts/generate-icons.mjs
+```
+
+`scripts/generate-icons.mjs` を編集して実行すると、192 / 512 / マスカブル / Apple Touch のPNGを再生成します。
+生成物はコミット済みなので、通常のビルドで実行する必要はありません。
+
+---
+
 ## 主な機能
 
 ### 参加者側
@@ -117,6 +175,7 @@ LOBBY → ACTIVE → SPY_MISSION_REVEALED → VOTING → IDENTITY_REVEALED → F
 | 日付 | date-fns |
 | QRコード | `qrcode` |
 | バックエンド | Supabase（PostgreSQL / Authentication / Realtime） |
+| PWA | Web App Manifest + 自作 Service Worker（外部ライブラリなし）/ Web Push（`web-push`） |
 | テスト | Vitest + Testing Library（jsdom） |
 | 品質 | ESLint（next/core-web-vitals + typescript）/ Prettier |
 
@@ -205,6 +264,7 @@ Supabase の環境変数が揃っていれば自動的に Supabase モードに�
    ```
    supabase/migrations/20260101000000_init.sql
    supabase/migrations/20260101000100_rls.sql
+   supabase/migrations/20260101000200_push.sql
    supabase/seed.sql
    ```
 3. Authentication > Users で運営者アカウントを作成します。
@@ -238,6 +298,8 @@ Supabase の環境変数が揃っていれば自動的に Supabase モードに�
 | `SPY_ALLOW_DEMO_IN_PRODUCTION` | 任意 | 本番デプロイでデモを許可する場合のみ `true` |
 | `SPY_ENV` | 任意 | `production` を指定すると本番デプロイとして扱う |
 | `DEMO_ADMIN_EMAIL` / `DEMO_ADMIN_PASSWORD` | 任意 | デモ管理者の資格情報 |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | 通知を使う場合 | Web Push の鍵。未設定なら通知機能は無効 |
+| `VAPID_SUBJECT` | 任意 | Web Push の連絡先（`mailto:` 形式） |
 
 ---
 
@@ -267,6 +329,10 @@ npm run verify       # typecheck + lint + test + build をまとめて実行
 - 管理者以外がフェーズを変更できない（未認証・参加者セッションのみ）
 - 複数SPYの正体を表示できる
 - モバイル幅（360px）で MISSION の主要操作が利用でき、タップ領域が44px以上ある
+- オフラインで達成を押すと端末に保持され「未送信」と表示される
+- 同じMISSIONを何度操作しても送信は1回にまとまる／通信エラーでは操作を失わない
+- サーバーに拒否された操作は再送し続けず、理由をそのまま表示する
+- VAPID公開鍵の変換が正しく往復する（プッシュ購読）
 
 ---
 
@@ -300,6 +366,10 @@ npm run verify       # typecheck + lint + test + build をまとめて実行
 9. **デモモードの既定値**は「Supabase 未設定かつ本番デプロイでない場合は有効」としました。
    `.env.local` が無くてもすぐデモを確認できる一方、Supabase 設定時・本番デプロイ時は自動的に無効になります。
 10. **デモモードのデータはプロセスメモリ**に保持します。サーバーを再起動すると初期状態に戻ります。
+11. **Service Worker は本番ビルドでのみ登録**します（開発中は HMR と競合するため）。
+    動作を確認するときは `npm run build && npm run start` を使ってください。
+12. **オフラインで保持するのは MISSION の達成操作だけ**にしました。投票は「締切後に届く」と
+    結果が壊れるため、オンライン時のみ受け付けます。
 
 ---
 
@@ -317,6 +387,9 @@ npm run verify       # typecheck + lint + test + build をまとめて実行
 - `NEXT_PUBLIC_APP_URL` を本番ドメインに設定し、QRコードのリンク先を確認する
 - 運営者アカウントの `is_admin` と `event_admins` の紐付け
 - 会場のネットワーク（Wi-Fi/回線）で、ポーリングとRealtimeが安定して届くかの事前確認
+- **HTTPS で配信すること**（Service Worker とプッシュ通知は https か localhost でしか動きません）
+- 実機での「ホーム画面に追加」とプッシュ通知の受信確認（iOS は追加後に開いてから許可する必要あり）
+- Service Worker を更新したときは `public/sw.js` の `VERSION` を上げる（古いキャッシュの破棄に使っています）
 
 ## 今後追加すると良い機能
 
@@ -325,6 +398,6 @@ npm run verify       # typecheck + lint + test + build をまとめて実行
 - ゲーム時間に応じた SPY MISSION の自動公開スケジューリング
 - 投票の同数時の扱い（決選投票／運営裁定）の明示
 - 結果のCSV／画像エクスポート、イベント終了後の振り返り画面
-- Web Push による全体通知、オフライン時の再送
 - 運営者の複数人運用（権限ロール、操作ログの可視化）
+- 参加者ごとの通知の出し分け（SPY本人だけへのリマインドなど）
 - 多言語対応（英語UI）

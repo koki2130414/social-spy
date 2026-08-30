@@ -129,6 +129,17 @@ export interface AdminUser {
   displayName: string;
 }
 
+/** プッシュ通知の購読情報（端末ごと） */
+export interface PushSubscriptionRecord {
+  id: string;
+  eventId: string;
+  participantId: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  createdAt: string;
+}
+
 /** 参加者画面が必要とする状態のスナップショット（role は自分の分のみ） */
 export interface ParticipantGameState {
   event: {

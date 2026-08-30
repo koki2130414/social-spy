@@ -6,6 +6,7 @@ import type {
   Participant,
   ParticipantRole,
   PhaseHistoryEntry,
+  PushSubscriptionRecord,
   SpyEvent,
   SpyNotification,
   Vote,
@@ -100,6 +101,17 @@ export interface Repo {
   getVoteByVoter(eventId: string, voterId: string): Promise<Vote | null>;
   listVotes(eventId: string): Promise<Vote[]>;
   insertVote(eventId: string, voterId: string, targetId: string): Promise<Vote>;
+
+  /* ------------- push 通知 ---------------- */
+  savePushSubscription(input: {
+    eventId: string;
+    participantId: string;
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+  }): Promise<void>;
+  deletePushSubscription(endpoint: string): Promise<void>;
+  listPushSubscriptions(eventId: string): Promise<PushSubscriptionRecord[]>;
 
   /* ----------------- admin ---------------- */
   isEventAdmin(eventId: string, adminId: string): Promise<boolean>;

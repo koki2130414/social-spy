@@ -32,7 +32,12 @@ export function useGameState(): GameStateResult {
       setError(null);
     } catch (e) {
       if (!mounted.current) return;
-      setError(e instanceof ApiError ? e : new ApiError('UNKNOWN', '通信に失敗しました。', 500));
+      // ApiError 以外はサーバーに届いていない＝通信断。status 0 で区別する
+      setError(
+        e instanceof ApiError
+          ? e
+          : new ApiError('NETWORK', 'サーバーに接続できませんでした。', 0),
+      );
     } finally {
       if (mounted.current) setLoading(false);
     }

@@ -3,8 +3,9 @@
 import { createContext, useContext, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ClipboardList, EyeOff, Home, Loader2, Trophy, Vote } from 'lucide-react';
+import { ClipboardList, EyeOff, Home, Loader2, Trophy, Vote, WifiOff } from 'lucide-react';
 import { useGameState, type GameStateResult } from '@/hooks/use-game-state';
+import { useOnlineStatus } from '@/hooks/use-online-status';
 import { PHASE_META, canVoteInPhase, isIdentityRevealed, isSpyMissionPublic } from '@/lib/core/phase';
 import { cn } from '@/lib/utils';
 import { SpyLogo } from './logo';
@@ -29,14 +30,18 @@ interface NavItem {
 
 export function GameShell({ children }: { children: React.ReactNode }) {
   const game = useGameState();
+  const online = useOnlineStatus();
   const router = useRouter();
   const pathname = usePathname();
 
+  // 通信が届いていない（status 0）場合は、参加情報の問題ではないので再登録へ誘導しない
+  const networkDown = !online || game.error?.status === 0;
+  const sessionInvalid =
+    !networkDown && (game.error?.status === 401 || game.error?.status === 404);
+
   useEffect(() => {
-    if (game.error && (game.error.status === 401 || game.error.status === 404)) {
-      router.replace('/join');
-    }
-  }, [game.error, router]);
+    if (sessionInvalid) router.replace('/join');
+  }, [sessionInvalid, router]);
 
   if (game.loading && !game.state) {
     return (
@@ -48,13 +53,39 @@ export function GameShell({ children }: { children: React.ReactNode }) {
 
   if (!game.state) {
     return (
-      <div className="mx-auto flex min-h-dvh max-w-lg flex-col items-center justify-center gap-4 px-4 text-center">
-        <p className="text-sm text-muted-foreground">
-          {game.error?.message ?? '参加情報が確認できませんでした。'}
-        </p>
-        <Link href="/join" className="headline-mono text-sm text-intel underline underline-offset-4">
-          参加登録へ
-        </Link>
+      <div className="mx-auto flex min-h-dvh max-w-lg flex-col items-center justify-center gap-5 px-4 text-center">
+        {networkDown ? (
+          <>
+            <WifiOff className="h-8 w-8 text-amber" aria-hidden />
+            <div>
+              <p className="headline-mono text-sm text-amber">SIGNAL LOST</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                通信が届いていません。アプリは閉じずにそのままお待ちください。
+                <br />
+                電波が戻ると自動的に再開します。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void game.refresh()}
+              className="tap-target headline-mono rounded-sm border border-border px-5 text-sm text-foreground"
+            >
+              今すぐ再試行
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">
+              {game.error?.message ?? '参加情報が確認できませんでした。'}
+            </p>
+            <Link
+              href="/join"
+              className="headline-mono text-sm text-intel underline underline-offset-4"
+            >
+              参加登録へ
+            </Link>
+          </>
+        )}
       </div>
     );
   }
@@ -97,7 +128,7 @@ export function GameShell({ children }: { children: React.ReactNode }) {
   return (
     <GameContext.Provider value={game}>
       <div className="flex min-h-dvh flex-col">
-        <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
+        <header className="safe-top safe-x sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
           <div className="mx-auto w-full max-w-lg px-4 py-3">
             <div className="flex items-center justify-between gap-2">
               <SpyLogo compact />
@@ -122,11 +153,21 @@ export function GameShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
+        {!online ? (
+          <p
+            role="status"
+            className="safe-x flex items-center justify-center gap-2 border-b border-amber/40 bg-amber/10 px-4 py-2 text-xs text-amber"
+          >
+            <WifiOff className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            オフラインです。記録した達成は復帰後に自動送信されます。
+          </p>
+        ) : null}
+
         <main className="mx-auto w-full max-w-lg flex-1 px-4 pb-28 pt-5">{children}</main>
 
         <nav
           aria-label="メインナビゲーション"
-          className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/97 backdrop-blur safe-bottom"
+          className="no-callout safe-x fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/97 backdrop-blur safe-bottom"
         >
           <ul className="mx-auto flex w-full max-w-lg">
             {nav.map((item) => {

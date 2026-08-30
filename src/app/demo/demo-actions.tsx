@@ -60,6 +60,8 @@ export function DemoActions() {
     setError(null);
     try {
       await apiSend('/api/demo/reset');
+      // Service Worker が持っている画面キャッシュも捨てて、まっさらな状態に戻す
+      navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_CACHES' });
       router.refresh();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'リセットに失敗しました。');

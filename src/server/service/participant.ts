@@ -242,6 +242,33 @@ export async function getResultForParticipant(): Promise<ParticipantResult> {
   };
 }
 
+/* --------------------------- プッシュ通知 --------------------------- */
+
+export async function subscribeToPush(input: {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}): Promise<void> {
+  const session = await requireSession();
+  const repo = getRepo();
+  const me = await repo.getParticipant(session.pid);
+  if (!me || me.eventId !== session.eid) {
+    throw new ServiceError('SESSION_INVALID', '参加情報が見つかりません。', 401);
+  }
+  await repo.savePushSubscription({
+    eventId: me.eventId,
+    participantId: me.id,
+    endpoint: input.endpoint,
+    p256dh: input.p256dh,
+    auth: input.auth,
+  });
+}
+
+export async function unsubscribeFromPush(endpoint: string): Promise<void> {
+  await requireSession();
+  await getRepo().deletePushSubscription(endpoint);
+}
+
 export async function getMyPublicProfile(): Promise<PublicParticipant> {
   const session = await requireSession();
   const repo = getRepo();

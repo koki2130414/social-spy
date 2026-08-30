@@ -82,6 +82,21 @@ export const spyAssignSchema = z.discriminatedUnion('mode', [
   }),
 ]);
 
+const pushEndpoint = z
+  .string()
+  .url('購読エンドポイントの形式が正しくありません。')
+  .max(1024, '購読エンドポイントが長すぎます。');
+
+export const pushSubscribeSchema = z.object({
+  endpoint: pushEndpoint,
+  p256dh: z.string().min(1, '購読鍵が空です。').max(256),
+  auth: z.string().min(1, '購読鍵が空です。').max(256),
+});
+
+export const pushUnsubscribeSchema = z.object({
+  endpoint: pushEndpoint,
+});
+
 export const demoPersonaSchema = z.object({
   persona: z.enum(['agent', 'spy', 'admin']),
 });

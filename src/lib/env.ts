@@ -93,6 +93,25 @@ export function demoAdminCredentials(): { email: string; password: string } {
   };
 }
 
+/**
+ * Web Push（VAPID）の設定。3つ揃っているときだけプッシュ通知を有効にする。
+ * 鍵の生成: npx web-push generate-vapid-keys
+ */
+export function vapidConfig(): { publicKey: string; privateKey: string; subject: string } | null {
+  const publicKey = process.env.VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  if (!publicKey || !privateKey) return null;
+  return {
+    publicKey,
+    privateKey,
+    subject: process.env.VAPID_SUBJECT || 'mailto:admin@example.com',
+  };
+}
+
+export function isPushConfigured(): boolean {
+  return vapidConfig() !== null;
+}
+
 export function supabaseConfig() {
   return {
     url: process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',

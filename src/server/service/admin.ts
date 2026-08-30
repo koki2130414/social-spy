@@ -19,7 +19,17 @@ import { getRepo } from '@/server/repo';
 import { ServiceError } from '@/server/errors';
 import { getAdminSession, setAdminSession, type AdminSession } from '@/server/auth/session';
 import { DEMO_ADMIN_ID } from '@/server/demo/seed';
+import { sendPushToEvent } from '@/server/push/send';
 import type { EventInput, MissionInput } from '@/server/repo/types';
+
+/** フェーズごとに、通知タップで開くべき画面 */
+const PHASE_DEEP_LINK: Partial<Record<GamePhase, string>> = {
+  ACTIVE: '/game/missions',
+  SPY_MISSION_REVEALED: '/game/intel',
+  VOTING: '/game/vote',
+  IDENTITY_REVEALED: '/game/result',
+  FINISHED: '/game/result',
+};
 
 export async function requireAdmin(): Promise<AdminSession> {
   const session = await getAdminSession();
@@ -182,6 +192,12 @@ export async function changePhase(eventId: string, to: GamePhase): Promise<SpyEv
   const notification = PHASE_NOTIFICATION[to];
   if (notification) {
     await repo.createNotification({ eventId, ...notification });
+    await sendPushToEvent(eventId, {
+      title: notification.title,
+      body: notification.body,
+      url: PHASE_DEEP_LINK[to] ?? '/game',
+      tag: 'phase',
+    });
   }
   return updated;
 }
@@ -317,7 +333,13 @@ export async function createNotification(input: {
   kind: NotificationKind;
 }): Promise<SpyNotification> {
   await requireEventAccess(input.eventId);
-  return getRepo().createNotification(input);
+  const notification = await getRepo().createNotification(input);
+  await sendPushToEvent(input.eventId, {
+    title: input.title,
+    body: input.body,
+    tag: 'notice',
+  });
+  return notification;
 }
 
 /* ------------------------------ results ----------------------------- */

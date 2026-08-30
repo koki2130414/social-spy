@@ -7,6 +7,7 @@ import type {
   ParticipantMission,
   ParticipantRole,
   PhaseHistoryEntry,
+  PushSubscriptionRecord,
   SpyEvent,
   SpyNotification,
   Vote,
@@ -32,6 +33,7 @@ import type {
 interface DemoState extends DemoDataset {
   /** 実際に人が操作している参加者（サンプル自動投票の対象外にする） */
   interactiveParticipantIds: Set<string>;
+  pushSubscriptions: PushSubscriptionRecord[];
   seq: number;
 }
 
@@ -40,6 +42,7 @@ function createState(): DemoState {
   return {
     ...data,
     interactiveParticipantIds: new Set([DEMO_AGENT_PARTICIPANT_ID, DEMO_SPY_PARTICIPANT_ID]),
+    pushSubscriptions: [],
     seq: 0,
   };
 }
@@ -411,6 +414,29 @@ export class DemoRepo implements Repo {
     };
     s.votes.push(vote);
     return vote;
+  }
+
+  /* ------------- push 通知 ---------------- */
+
+  async savePushSubscription(input: {
+    eventId: string;
+    participantId: string;
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+  }): Promise<void> {
+    const s = state();
+    s.pushSubscriptions = s.pushSubscriptions.filter((p) => p.endpoint !== input.endpoint);
+    s.pushSubscriptions.push({ id: nextId('ps'), ...input, createdAt: now() });
+  }
+
+  async deletePushSubscription(endpoint: string): Promise<void> {
+    const s = state();
+    s.pushSubscriptions = s.pushSubscriptions.filter((p) => p.endpoint !== endpoint);
+  }
+
+  async listPushSubscriptions(eventId: string): Promise<PushSubscriptionRecord[]> {
+    return state().pushSubscriptions.filter((p) => p.eventId === eventId);
   }
 
   /* ----------------- admin ---------------- */

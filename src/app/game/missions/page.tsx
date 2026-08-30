@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, Circle, Loader2, Lock } from 'lucide-react';
+import { CheckCircle2, CloudUpload, Circle, Loader2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -17,9 +17,14 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ClassifiedPanel } from '@/components/spy/classified-panel';
 import { useGame } from '@/components/spy/game-shell';
-import { apiSend, ApiError } from '@/lib/api';
+import { useOfflineSync } from '@/hooks/use-offline-sync';
 import { canUpdateMissionProgress } from '@/lib/core/phase';
 import type { AssignedMission } from '@/lib/types';
+
+/** 未送信の操作を重ねた表示用のMISSION */
+interface DisplayMission extends AssignedMission {
+  unsent: boolean;
+}
 
 function MissionItem({
   mission,
@@ -29,10 +34,10 @@ function MissionItem({
   pending,
   variant,
 }: {
-  mission: AssignedMission;
+  mission: DisplayMission;
   index: number;
   locked: boolean;
-  onToggle: (mission: AssignedMission) => void;
+  onToggle: (mission: DisplayMission) => void;
   pending: boolean;
   variant: 'general' | 'spy';
 }) {
@@ -44,7 +49,7 @@ function MissionItem({
         tone={done ? 'intel' : variant === 'spy' ? 'danger' : 'default'}
         stamp={done ? 'COMPLETE' : undefined}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="label-mono">
             {variant === 'spy' ? 'SPY MISSION' : 'MISSION'} {String(index + 1).padStart(2, '0')}
           </span>
@@ -53,6 +58,12 @@ function MissionItem({
           ) : (
             <Circle className="h-4 w-4 text-muted-foreground/60" aria-hidden />
           )}
+          {mission.unsent ? (
+            <Badge variant="amber" title="通信が戻ると自動で送信されます">
+              <CloudUpload className="mr-1 h-3 w-3" aria-hidden />
+              未送信
+            </Badge>
+          ) : null}
         </div>
 
         <h2
@@ -105,28 +116,36 @@ function MissionItem({
 
 export default function MissionsPage() {
   const { state, refresh } = useGame();
+  const sync = useOfflineSync(refresh);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (!state) return null;
 
   const locked = !canUpdateMissionProgress(state.event.phase);
-  const ownSpyMissions = state.me.isSpy ? (state.spyMissions ?? []) : [];
 
-  const toggle = async (mission: AssignedMission) => {
+  /** サーバーの状態に、まだ送れていない操作を重ねる */
+  const merge = (list: AssignedMission[]): DisplayMission[] =>
+    list.map((m) => {
+      const queued = sync.pending[m.assignmentId];
+      return {
+        ...m,
+        completed: queued === undefined ? m.completed : queued,
+        unsent: queued !== undefined,
+      };
+    });
+
+  const missions = merge(state.missions);
+  const ownSpyMissions = state.me.isSpy ? merge(state.spyMissions ?? []) : [];
+  const completedCount = missions.filter((m) => m.completed).length;
+
+  const toggle = async (mission: DisplayMission) => {
     setPendingId(mission.assignmentId);
     setError(null);
-    try {
-      await apiSend('/api/participant/missions/complete', {
-        assignmentId: mission.assignmentId,
-        completed: !mission.completed,
-      });
-      await refresh();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : '更新に失敗しました。');
-    } finally {
-      setPendingId(null);
-    }
+    const result = await sync.submitMission(mission.assignmentId, !mission.completed);
+    if (result.status === 'sent') await refresh();
+    if (result.status === 'rejected') setError(result.message);
+    setPendingId(null);
   };
 
   return (
@@ -134,7 +153,7 @@ export default function MissionsPage() {
       <header>
         <p className="label-mono">YOUR MISSION</p>
         <h1 className="headline-mono mt-1 text-lg">
-          達成 {state.completedCount} / {state.totalCount}
+          達成 {completedCount} / {state.totalCount}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           達成は自己申告制です。人と話すことに集中してください。
@@ -150,6 +169,13 @@ export default function MissionsPage() {
         </p>
       ) : null}
 
+      {sync.pendingCount > 0 ? (
+        <p className="flex items-center gap-2 rounded-sm border border-amber/40 bg-amber/10 p-3 text-sm text-amber">
+          <CloudUpload className="h-4 w-4 shrink-0" aria-hidden />
+          {sync.pendingCount}件が未送信です。通信が戻ると自動的に送信されます。
+        </p>
+      ) : null}
+
       {error ? (
         <p role="alert" className="border border-primary/50 bg-primary/10 p-3 text-sm text-primary">
           {error}
@@ -157,7 +183,7 @@ export default function MissionsPage() {
       ) : null}
 
       <ul className="space-y-3">
-        {state.missions.map((m, i) => (
+        {missions.map((m, i) => (
           <MissionItem
             key={m.assignmentId}
             mission={m}

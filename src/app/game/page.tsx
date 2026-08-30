@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ClassifiedPanel } from '@/components/spy/classified-panel';
 import { useGame } from '@/components/spy/game-shell';
+import { InstallPrompt } from '@/components/pwa/install-prompt';
+import { PushToggle } from '@/components/pwa/push-toggle';
 import { PHASE_META, participantPrimaryAction } from '@/lib/core/phase';
 
 export default function GameHomePage() {
@@ -20,6 +22,8 @@ export default function GameHomePage() {
 
   return (
     <div className="space-y-5">
+      <InstallPrompt />
+
       {/* 自分の役割 */}
       <ClassifiedPanel className="p-5" tone={state.me.isSpy ? 'danger' : 'intel'}>
         <div className="flex items-start justify-between gap-3">
@@ -107,6 +111,11 @@ export default function GameHomePage() {
             通知はまだありません。
           </p>
         )}
+      </section>
+
+      <section>
+        <p className="label-mono mb-2">Alerts</p>
+        <PushToggle />
       </section>
 
       <section className="flex flex-wrap items-center gap-2 pt-2">
