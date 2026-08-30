@@ -15,6 +15,8 @@ import {
   setParticipantSession,
   type ParticipantSession,
 } from '@/server/auth/session';
+import { verifyPassword } from '@/server/auth/password';
+import { normalizeLoginId } from '@/lib/core/credentials';
 import { normalizeEventCode } from '@/lib/utils';
 
 async function requireSession(): Promise<ParticipantSession> {
@@ -31,7 +33,9 @@ export interface JoinInput {
   affiliation?: string | null;
 }
 
-export async function joinEvent(input: JoinInput): Promise<{ eventId: string; participantId: string }> {
+export async function joinEvent(
+  input: JoinInput,
+): Promise<{ eventId: string; participantId: string }> {
   const repo = getRepo();
   const event = await repo.getEventByCode(normalizeEventCode(input.code));
   if (!event) {
@@ -69,6 +73,43 @@ export async function joinEvent(input: JoinInput): Promise<{ eventId: string; pa
   return { eventId: event.id, participantId: participant.id };
 }
 
+export interface LoginInput {
+  code: string;
+  loginId: string;
+  password: string;
+}
+
+/**
+ * 運営が発行したIDとパスワードでログインする。
+ *
+ * IDが存在しない場合とパスワードが違う場合で応答を変えない。
+ * 「そのIDは存在する」と分かること自体が、当日の総当たりの手がかりになるため。
+ */
+export async function loginParticipant(
+  input: LoginInput,
+): Promise<{ eventId: string; participantId: string }> {
+  const repo = getRepo();
+  const event = await repo.getEventByCode(normalizeEventCode(input.code));
+
+  const failed = () =>
+    new ServiceError('INVALID_CREDENTIALS', 'IDまたはパスワードが違います。', 401);
+
+  if (!event) throw failed();
+
+  const participant = await repo.findParticipantByLoginId(
+    event.id,
+    normalizeLoginId(input.loginId),
+  );
+  if (!participant) throw failed();
+
+  const hash = await repo.getParticipantPasswordHash(participant.id);
+  if (!hash) throw failed();
+  if (!(await verifyPassword(input.password, hash))) throw failed();
+
+  await setParticipantSession(participant.id, event.id);
+  return { eventId: event.id, participantId: participant.id };
+}
+
 /** 参加者画面が必要とする状態。他人の役割は絶対に含めない */
 export async function getGameState(): Promise<ParticipantGameState> {
   const session = await requireSession();
@@ -79,7 +120,11 @@ export async function getGameState(): Promise<ParticipantGameState> {
     repo.getParticipant(session.pid),
   ]);
   if (!event || !me || me.eventId !== event.id) {
-    throw new ServiceError('SESSION_INVALID', '参加情報が見つかりません。再度参加してください。', 401);
+    throw new ServiceError(
+      'SESSION_INVALID',
+      '参加情報が見つかりません。再度参加してください。',
+      401,
+    );
   }
 
   const [assigned, notifications, vote, participants] = await Promise.all([
@@ -118,7 +163,9 @@ export async function getGameState(): Promise<ParticipantGameState> {
   const votedTarget = vote ? participants.find((p) => p.id === vote.targetParticipantId) : null;
 
   const endsAt = event.activeStartedAt
-    ? new Date(new Date(event.activeStartedAt).getTime() + event.durationMinutes * 60_000).toISOString()
+    ? new Date(
+        new Date(event.activeStartedAt).getTime() + event.durationMinutes * 60_000,
+      ).toISOString()
     : null;
 
   return {
