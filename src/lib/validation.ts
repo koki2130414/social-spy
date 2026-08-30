@@ -21,6 +21,23 @@ export const joinSchema = z.object({
 });
 export type JoinFormValues = z.infer<typeof joinSchema>;
 
+/** 運営が発行したIDとパスワードでのログイン */
+export const participantLoginSchema = z.object({
+  code: z
+    .string()
+    .min(4, 'イベントコードを入力してください。')
+    .max(16, 'イベントコードが長すぎます。')
+    .transform((v) => v.trim().toUpperCase()),
+  loginId: z
+    .string()
+    .trim()
+    .min(4, 'IDを入力してください。')
+    .max(24, 'IDが長すぎます。')
+    .transform((v) => v.toLowerCase()),
+  password: z.string().min(6, 'パスワードを入力してください。').max(64),
+});
+export type ParticipantLoginValues = z.infer<typeof participantLoginSchema>;
+
 export const missionCompleteSchema = z.object({
   assignmentId: z.string().min(1),
   completed: z.boolean(),
@@ -84,6 +101,13 @@ export const participantCreateSchema = z.object({
     .string()
     .trim()
     .max(48, '所属・肩書きは48文字以内で入力してください。')
+    .optional()
+    .or(z.literal('')),
+  /** 空なら自動発行する */
+  loginId: z
+    .string()
+    .trim()
+    .max(24, 'IDは24文字以内で入力してください。')
     .optional()
     .or(z.literal('')),
 });
