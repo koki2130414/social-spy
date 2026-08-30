@@ -8,6 +8,7 @@ import { getRepo } from '@/server/repo';
 import {
   ADMIN_COOKIE,
   clearAdminSession,
+  setAdminSession,
   setParticipantSession,
 } from '@/server/auth/session';
 import {
@@ -31,6 +32,7 @@ import {
   getAdminResult,
   getEvent,
   listAdminParticipants,
+  requireAdmin,
 } from './admin';
 import { ServiceError } from '@/server/errors';
 import { demoAdminCredentials } from '@/lib/env';
@@ -290,6 +292,37 @@ describe('フェーズ変更の権限', () => {
     // フェーズは LOBBY のままであること
     const event = await getRepo().getEvent(DEMO_EVENT_ID);
     expect(event?.phase).toBe('LOBBY');
+  });
+
+  it('デモ用セッションが残っていても、本番モードではログインし直しを促す', async () => {
+    // Supabase接続前のデモ用Cookieが残っている状況を再現する
+    await setAdminSession({
+      uid: 'demo-admin',
+      email: 'admin@socialspy.demo',
+      name: 'DEMO CONTROL',
+      demo: true,
+    });
+    expect(cookieJar.has(ADMIN_COOKIE)).toBe(true);
+
+    // 本番（Supabase）モードとして扱わせる
+    const original = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service';
+
+    try {
+      // 403で行き止まりにせず、401にしてログイン画面へ戻せるようにする
+      await expect(requireAdmin()).rejects.toMatchObject({
+        code: 'NOT_AUTHENTICATED',
+        status: 401,
+      });
+      // 使えないCookieはその場で捨てる
+      expect(cookieJar.has(ADMIN_COOKIE)).toBe(false);
+    } finally {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = original;
+      delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    }
   });
 
   it('不正な資格情報ではログインできない', async () => {
