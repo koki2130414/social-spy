@@ -585,4 +585,11 @@ export class SupabaseRepo implements Repo {
     if (error) throw new Error(`isEventAdmin: ${error.message}`);
     return Boolean(data);
   }
+
+  async addEventAdmin(eventId: string, userId: string): Promise<void> {
+    const { error } = await this.db
+      .from('event_admins')
+      .upsert({ event_id: eventId, user_id: userId }, { onConflict: 'event_id,user_id' });
+    if (error) throw new Error(`addEventAdmin: ${error.message}`);
+  }
 }
