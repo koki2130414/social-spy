@@ -9,6 +9,7 @@ import type {
 } from '@/lib/types';
 import { createRng, shuffle } from '@/lib/core/random';
 import { pickMissionsForParticipant, pickSpyMissions } from '@/lib/core/missions';
+import { GENERAL_MISSION_PRESETS, SPY_MISSION_PRESETS } from '@/lib/core/mission-presets';
 
 export const DEMO_EVENT_ID = 'ev-demo-0000-0000-0000-000000000001';
 export const DEMO_EVENT_CODE = 'SPY2026';
@@ -23,66 +24,12 @@ const BASE_TIME = new Date('2026-09-12T10:00:00.000Z');
 const iso = (offsetMinutes = 0) =>
   new Date(BASE_TIME.getTime() + offsetMinutes * 60_000).toISOString();
 
-export const GENERAL_MISSION_SEEDS: Array<Pick<Mission, 'code' | 'title' | 'body'>> = [
-  {
-    code: 'SNS EXCHANGE',
-    title: 'SNS交換',
-    body: '3人の参加者とSNSを交換せよ。',
-  },
-  {
-    code: 'COMMON GROUND',
-    title: '共通点の発見',
-    body: '初対面の人と共通点を3つ見つけよ。',
-  },
-  {
-    code: 'CONNECT PEOPLE',
-    title: '橋渡し',
-    body: 'まだ話したことがない参加者同士を2人紹介せよ。',
-  },
-  {
-    code: 'NEW FIELD',
-    title: '異分野接触',
-    body: '自分とは異なるジャンルで活動している人と話せ。',
-  },
-  {
-    code: 'LOCAL INTEL',
-    title: '現地情報の収集',
-    body: '3人におすすめの店を聞け。',
-  },
-  {
-    code: 'FUTURE PLAN',
-    title: '将来計画の聴取',
-    body: '2人に今後挑戦したいことを聞け。',
-  },
-  {
-    code: 'FIRST CONTACT',
-    title: '初接触',
-    body: 'これまで話したことがない5人と会話せよ。',
-  },
-  {
-    code: 'COLLABORATION',
-    title: '共同作戦',
-    body: '一緒にできそうな企画を誰か一人と考えよ。',
-  },
-];
-
-export const SPY_MISSION_SEEDS: Array<Pick<Mission, 'code' | 'title' | 'body'>> = [
-  {
-    code: 'INFORMATION GATHERING',
-    title: '情報収集',
-    body: '5人以上の参加者から、現在取り組んでいる活動について情報を集めよ。',
-  },
-  {
-    code: 'REPEATED QUESTION',
-    title: '反復質問',
-    body: '5人の参加者に、最近一番時間を使っていることを質問せよ。',
-  },
-  {
-    code: 'WIDE CONTACT',
-    title: '広域接触',
-    body: '10人以上の参加者と会話せよ。',
-  },
-];
+/**
+ * MISSION の文言は lib/core/mission-presets.ts に一本化している。
+ * デモ用シードと、管理画面からの新規イベント作成が同じ定義を使うため。
+ */
+export const GENERAL_MISSION_SEEDS = GENERAL_MISSION_PRESETS;
+export const SPY_MISSION_SEEDS = SPY_MISSION_PRESETS;
 
 const PARTICIPANT_SEEDS: Array<{ name: string; affiliation: string; spy?: boolean }> = [
   { name: '佐藤 悠真', affiliation: 'フリーランス / Webデザイナー' },
