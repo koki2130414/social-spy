@@ -1,4 +1,4 @@
-# SOCIAL SPY
+# BUZZ BASE
 
 > 交流を、ゲームにする。
 > 交流会は、すでに諜報戦になっている。
@@ -192,7 +192,7 @@ src/
     demo/               デモ視点の切り替え
   components/
     ui/                 汎用UI（button, card, dialog, table ...）
-    spy/                SOCIAL SPY 固有UI（GameShell, AdminShell, PhaseBadge ...）
+    spy/                BUZZ BASE 固有UI（GameShell, AdminShell, PhaseBadge ...）
   hooks/                状態取得・ポーリング・Realtime購読
   lib/
     core/               ゲームのドメインロジック（純粋関数・テスト対象）
