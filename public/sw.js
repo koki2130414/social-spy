@@ -1,5 +1,5 @@
 /* =============================================================================
- * SOCIAL SPY — Service Worker
+ * BUZZ BASE — Service Worker
  *
  * 方針
  *  - APIレスポンスは一切キャッシュしない。
@@ -125,10 +125,10 @@ self.addEventListener('push', (event) => {
   try {
     payload = event.data ? event.data.json() : {};
   } catch {
-    payload = { title: 'SOCIAL SPY', body: event.data ? event.data.text() : '' };
+    payload = { title: 'BUZZ BASE', body: event.data ? event.data.text() : '' };
   }
 
-  const title = payload.title || 'SOCIAL SPY';
+  const title = payload.title || 'BUZZ BASE';
   const options = {
     body: payload.body || '',
     icon: '/icons/icon-192.png',
