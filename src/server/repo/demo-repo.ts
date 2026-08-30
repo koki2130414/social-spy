@@ -30,9 +30,16 @@ import type {
   Repo,
 } from './types';
 
+/** event_admins 相当のキー */
+function adminKey(eventId: string, userId: string): string {
+  return `${eventId}::${userId}`;
+}
+
 interface DemoState extends DemoDataset {
   /** 実際に人が操作している参加者（サンプル自動投票の対象外にする） */
   interactiveParticipantIds: Set<string>;
+  /** どの管理者がどのイベントを管理できるか（Supabaseの event_admins と同じ役割） */
+  eventAdmins: Set<string>;
   pushSubscriptions: PushSubscriptionRecord[];
   seq: number;
 }
@@ -42,6 +49,7 @@ function createState(): DemoState {
   return {
     ...data,
     interactiveParticipantIds: new Set([DEMO_AGENT_PARTICIPANT_ID, DEMO_SPY_PARTICIPANT_ID]),
+    eventAdmins: new Set(data.events.map((e) => adminKey(e.id, DEMO_ADMIN_ID))),
     pushSubscriptions: [],
     seq: 0,
   };
@@ -442,7 +450,12 @@ export class DemoRepo implements Repo {
   /* ----------------- admin ---------------- */
 
   async isEventAdmin(eventId: string, adminId: string): Promise<boolean> {
-    // デモモードではデモ管理者が全イベントを管理する
-    return adminId === DEMO_ADMIN_ID && state().events.some((e) => e.id === eventId);
+    // 本番（Supabase）と同じ判定にしておく。
+    // 「デモだから常に許可」にすると、権限まわりの不具合をテストで検出できなくなる。
+    return state().eventAdmins.has(adminKey(eventId, adminId));
+  }
+
+  async addEventAdmin(eventId: string, userId: string): Promise<void> {
+    state().eventAdmins.add(adminKey(eventId, userId));
   }
 }
