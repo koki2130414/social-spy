@@ -11,15 +11,16 @@ import type {
   SpyEvent,
   SpyNotification,
 } from '@/lib/types';
-import { isValidPhaseTransition, PHASE_META } from '@/lib/core/phase';
+import { canRegister, isValidPhaseTransition, PHASE_META } from '@/lib/core/phase';
 import { GENERAL_MISSION_PRESETS, SPY_MISSION_PRESETS } from '@/lib/core/mission-presets';
 import { selectSpies } from '@/lib/core/spy';
 import { computeResults } from '@/lib/core/vote';
-import { appMode, demoAdminCredentials, supabaseConfig } from '@/lib/env';
+import { appMode, appUrl, demoAdminCredentials, supabaseConfig } from '@/lib/env';
 import { getRepo } from '@/server/repo';
 import { ServiceError } from '@/server/errors';
 import {
   clearAdminSession,
+  createJoinToken,
   getAdminSession,
   setAdminSession,
   type AdminSession,
@@ -60,7 +61,11 @@ export async function adminLogin(email: string, password: string): Promise<Admin
   if (appMode() === 'demo') {
     const creds = demoAdminCredentials();
     if (email.trim().toLowerCase() !== creds.email.toLowerCase() || password !== creds.password) {
-      throw new ServiceError('INVALID_CREDENTIALS', 'メールアドレスまたはパスワードが違います。', 401);
+      throw new ServiceError(
+        'INVALID_CREDENTIALS',
+        'メールアドレスまたはパスワードが違います。',
+        401,
+      );
     }
     const session = {
       uid: DEMO_ADMIN_ID,
@@ -77,7 +82,11 @@ export async function adminLogin(email: string, password: string): Promise<Admin
   const auth = createClient(url, anonKey, { auth: { persistSession: false } });
   const { data, error } = await auth.auth.signInWithPassword({ email, password });
   if (error || !data.user) {
-    throw new ServiceError('INVALID_CREDENTIALS', 'メールアドレスまたはパスワードが違います。', 401);
+    throw new ServiceError(
+      'INVALID_CREDENTIALS',
+      'メールアドレスまたはパスワードが違います。',
+      401,
+    );
   }
 
   const { supabaseAdmin } = await import('@/server/supabase/clients');
@@ -101,7 +110,9 @@ export async function adminLogin(email: string, password: string): Promise<Admin
   return { ...session, iat: Date.now() };
 }
 
-async function requireEventAccess(eventId: string): Promise<{ session: AdminSession; event: SpyEvent }> {
+async function requireEventAccess(
+  eventId: string,
+): Promise<{ session: AdminSession; event: SpyEvent }> {
   const session = await requireAdmin();
   const repo = getRepo();
   const event = await repo.getEvent(eventId);
@@ -183,7 +194,9 @@ export async function updateEvent(eventId: string, input: Partial<EventInput>): 
 
 /* ------------------------------ phase ------------------------------- */
 
-const PHASE_NOTIFICATION: Partial<Record<GamePhase, { title: string; body: string; kind: NotificationKind }>> = {
+const PHASE_NOTIFICATION: Partial<
+  Record<GamePhase, { title: string; body: string; kind: NotificationKind }>
+> = {
   ACTIVE: {
     title: 'OPERATION START',
     body: '作戦を開始する。各自のMISSIONを遂行せよ。',
@@ -264,6 +277,8 @@ export interface AdminParticipantRow {
   hasVoted: boolean;
   votedFor: string | null;
   joinedAt: string;
+  /** この参加者専用の参加用URL。運営が本人に渡す */
+  joinUrl: string;
 }
 
 export async function listAdminParticipants(eventId: string): Promise<AdminParticipantRow[]> {
@@ -289,8 +304,55 @@ export async function listAdminParticipants(eventId: string): Promise<AdminParti
       hasVoted: Boolean(vote),
       votedFor: vote ? (nameById.get(vote.targetParticipantId) ?? null) : null,
       joinedAt: p.joinedAt,
+      joinUrl: buildJoinUrl(p.id, p.eventId),
     };
   });
+}
+
+/**
+ * 運営が参加者を代理登録する。
+ *
+ * 参加者本人が /join を使う場合と同じく、登録と同時に一般MISSIONを3件配る。
+ * 受付を締め切っていても運営は追加できる（当日の飛び込みや代理受付のため）が、
+ * 投票以降のフェーズでは公平性が壊れるので追加できない。
+ */
+export async function registerParticipant(
+  eventId: string,
+  input: { displayName: string; affiliation?: string | null },
+): Promise<{ participant: Participant; joinUrl: string }> {
+  const { event } = await requireEventAccess(eventId);
+  if (!canRegister(event.phase)) {
+    throw new ServiceError(
+      'PHASE_NOT_ACCEPTING',
+      'ゲームが進行しているため、これ以上参加者を追加できません。',
+      403,
+    );
+  }
+
+  const displayName = input.displayName.trim();
+  const repo = getRepo();
+  const duplicated = await repo.findParticipantByName(eventId, displayName);
+  if (duplicated) {
+    throw new ServiceError(
+      'DUPLICATE_NAME',
+      'その表示名はすでに登録されています。別の名前にしてください。',
+      409,
+    );
+  }
+
+  const participant = await repo.createParticipant({
+    eventId,
+    displayName,
+    affiliation: input.affiliation?.trim() || null,
+  });
+  await repo.assignGeneralMissions(participant.id);
+
+  return { participant, joinUrl: buildJoinUrl(participant.id, eventId) };
+}
+
+/** 参加者ごとの参加用URL（この人専用の入口） */
+export function buildJoinUrl(participantId: string, eventId: string): string {
+  return `${appUrl()}/j/${createJoinToken(participantId, eventId)}`;
 }
 
 export async function autoAssignSpies(eventId: string, count?: number): Promise<Participant[]> {
