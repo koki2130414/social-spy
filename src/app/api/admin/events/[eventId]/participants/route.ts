@@ -1,5 +1,6 @@
-import { fail, ok } from '@/server/http';
-import { listAdminParticipants } from '@/server/service/admin';
+import { participantCreateSchema } from '@/lib/validation';
+import { fail, ok, parseBody } from '@/server/http';
+import { listAdminParticipants, registerParticipant } from '@/server/service/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,29 @@ export async function GET(_request: Request, { params }: Ctx) {
   try {
     const { eventId } = await params;
     return ok({ participants: await listAdminParticipants(eventId) });
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/** 運営が参加者を代理登録する */
+export async function POST(request: Request, { params }: Ctx) {
+  try {
+    const { eventId } = await params;
+    const body = await parseBody(request, participantCreateSchema);
+    const { participant, joinUrl } = await registerParticipant(eventId, {
+      displayName: body.displayName,
+      affiliation: body.affiliation || null,
+    });
+    return ok(
+      {
+        id: participant.id,
+        displayName: participant.displayName,
+        affiliation: participant.affiliation,
+        joinUrl,
+      },
+      201,
+    );
   } catch (error) {
     return fail(error);
   }
