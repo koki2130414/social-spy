@@ -14,13 +14,7 @@ import type {
 import { pickMissionsForParticipant, pickSpyMissions } from '@/lib/core/missions';
 import { normalizeEventCode } from '@/lib/utils';
 import { supabaseAdmin } from '@/server/supabase/clients';
-import type {
-  EventInput,
-  MissionInput,
-  MissionProgress,
-  NotificationInput,
-  Repo,
-} from './types';
+import type { EventInput, MissionInput, MissionProgress, NotificationInput, Repo } from './types';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Row = Record<string, any>;
@@ -50,6 +44,7 @@ function mapParticipant(r: Row): Participant {
     displayName: r.display_name,
     affiliation: r.affiliation,
     role: r.role as ParticipantRole,
+    loginId: (r.login_id as string | null) ?? null,
     joinedAt: r.joined_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -237,6 +232,8 @@ export class SupabaseRepo implements Repo {
     eventId: string;
     displayName: string;
     affiliation: string | null;
+    loginId?: string | null;
+    passwordHash?: string | null;
   }): Promise<Participant> {
     const { data, error } = await this.db
       .from('participants')
@@ -245,10 +242,49 @@ export class SupabaseRepo implements Repo {
         display_name: input.displayName,
         affiliation: input.affiliation,
         role: 'AGENT',
+        login_id: input.loginId ?? null,
+        password_hash: input.passwordHash ?? null,
       })
       .select('*')
       .single();
     return mapParticipant(unwrap(data, error, 'createParticipant'));
+  }
+
+  async findParticipantByLoginId(eventId: string, loginId: string): Promise<Participant | null> {
+    const { data, error } = await this.db
+      .from('participants')
+      .select('*')
+      .eq('event_id', eventId)
+      .ilike('login_id', loginId)
+      .maybeSingle();
+    if (error) throw new Error(`findParticipantByLoginId: ${error.message}`);
+    return data ? mapParticipant(data) : null;
+  }
+
+  async getParticipantPasswordHash(participantId: string): Promise<string | null> {
+    const { data, error } = await this.db
+      .from('participants')
+      .select('password_hash')
+      .eq('id', participantId)
+      .maybeSingle();
+    if (error) throw new Error(`getParticipantPasswordHash: ${error.message}`);
+    return (data?.password_hash as string | null) ?? null;
+  }
+
+  async setParticipantCredentials(
+    participantId: string,
+    input: { loginId?: string; passwordHash?: string },
+  ): Promise<Participant> {
+    const patch: Row = {};
+    if (input.loginId !== undefined) patch.login_id = input.loginId;
+    if (input.passwordHash !== undefined) patch.password_hash = input.passwordHash;
+    const { data, error } = await this.db
+      .from('participants')
+      .update(patch)
+      .eq('id', participantId)
+      .select('*')
+      .single();
+    return mapParticipant(unwrap(data, error, 'setParticipantCredentials'));
   }
 
   async getParticipant(id: string): Promise<Participant | null> {
@@ -361,7 +397,10 @@ export class SupabaseRepo implements Repo {
     if (error) throw new Error(`deleteMission: ${error.message}`);
   }
 
-  async listAssignedMissions(participantId: string, kind?: MissionKind): Promise<AssignedMission[]> {
+  async listAssignedMissions(
+    participantId: string,
+    kind?: MissionKind,
+  ): Promise<AssignedMission[]> {
     const { data, error } = await this.db
       .from('participant_missions')
       .select('*, missions(*)')
@@ -459,7 +498,9 @@ export class SupabaseRepo implements Repo {
       );
     const rows = unwrap(data, error, 'missionProgress');
     return participants.map((p) => {
-      const list = rows.filter((r: Row) => r.participant_id === p.id && r.missions?.kind === 'GENERAL');
+      const list = rows.filter(
+        (r: Row) => r.participant_id === p.id && r.missions?.kind === 'GENERAL',
+      );
       return {
         participantId: p.id,
         completed: list.filter((r: Row) => r.completed).length,
