@@ -6,8 +6,8 @@ import type { MetadataRoute } from 'next';
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'SOCIAL SPY',
-    short_name: 'SOCIAL SPY',
+    name: 'BUZZ BASE',
+    short_name: 'BUZZ BASE',
     description: '交流を、ゲームにする。交流会向けのスパイ探し × 交流ゲーム',
     lang: 'ja',
     dir: 'ltr',
