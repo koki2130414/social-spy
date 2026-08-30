@@ -12,6 +12,7 @@ import type {
   SpyNotification,
 } from '@/lib/types';
 import { isValidPhaseTransition, PHASE_META } from '@/lib/core/phase';
+import { GENERAL_MISSION_PRESETS, SPY_MISSION_PRESETS } from '@/lib/core/mission-presets';
 import { selectSpies } from '@/lib/core/spy';
 import { computeResults } from '@/lib/core/vote';
 import { appMode, demoAdminCredentials, supabaseConfig } from '@/lib/env';
@@ -93,11 +94,11 @@ async function requireEventAccess(eventId: string): Promise<{ session: AdminSess
   const repo = getRepo();
   const event = await repo.getEvent(eventId);
   if (!event) throw new ServiceError('EVENT_NOT_FOUND', 'イベントが見つかりません。', 404);
-  if (repo.kind === 'supabase') {
-    const allowed = await repo.isEventAdmin(eventId, session.uid);
-    if (!allowed) {
-      throw new ServiceError('FORBIDDEN', 'このイベントを管理する権限がありません。', 403);
-    }
+
+  // デモ／本番で同じ権限判定を通す（モードによる分岐を作らない）
+  const allowed = await repo.isEventAdmin(eventId, session.uid);
+  if (!allowed) {
+    throw new ServiceError('FORBIDDEN', 'このイベントを管理する権限がありません。', 403);
   }
   return { session, event };
 }
@@ -114,14 +115,46 @@ export async function getEvent(eventId: string): Promise<SpyEvent> {
   return event;
 }
 
+/**
+ * 新しいイベントに初期MISSION（一般8件 + SPY3件）を用意する。
+ * MISSIONが1件も無いイベントは、参加者が登録しても何も配布されず成立しない。
+ */
+async function seedPresetMissions(eventId: string): Promise<number> {
+  const repo = getRepo();
+  const existing = await repo.listMissions(eventId);
+  if (existing.length > 0) return 0;
+
+  let created = 0;
+  for (const preset of GENERAL_MISSION_PRESETS) {
+    await repo.createMission({ eventId, ...preset, kind: 'GENERAL', active: true });
+    created += 1;
+  }
+  for (const preset of SPY_MISSION_PRESETS) {
+    await repo.createMission({ eventId, ...preset, kind: 'SPY', active: true });
+    created += 1;
+  }
+  return created;
+}
+
 export async function createEvent(input: EventInput): Promise<SpyEvent> {
-  await requireAdmin();
+  const session = await requireAdmin();
   const repo = getRepo();
   const existing = await repo.getEventByCode(input.code);
   if (existing) {
     throw new ServiceError('CODE_TAKEN', 'このイベントコードはすでに使われています。', 409);
   }
-  return repo.createEvent(input);
+
+  const event = await repo.createEvent(input);
+
+  // 作成者をこのイベントの管理者として登録する。
+  // これが無いと権限チェックに弾かれ、作った本人が操作できないイベントになる。
+  await repo.addEventAdmin(event.id, session.uid);
+
+  // すぐ使える状態にするため、初期MISSIONも一緒に用意する。
+  // 文言はあとから /admin/missions で自由に編集・削除できる。
+  await seedPresetMissions(event.id);
+
+  return event;
 }
 
 export async function updateEvent(eventId: string, input: Partial<EventInput>): Promise<SpyEvent> {
