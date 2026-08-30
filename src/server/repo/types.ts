@@ -67,11 +67,24 @@ export interface Repo {
     eventId: string;
     displayName: string;
     affiliation: string | null;
+    /** 運営が代理登録したときのみ設定する */
+    loginId?: string | null;
+    passwordHash?: string | null;
   }): Promise<Participant>;
   getParticipant(id: string): Promise<Participant | null>;
   /** 機密（role を含む）。管理者権限を確認した後にのみ呼ぶこと */
   listParticipants(eventId: string): Promise<Participant[]>;
   findParticipantByName(eventId: string, displayName: string): Promise<Participant | null>;
+  findParticipantByLoginId(eventId: string, loginId: string): Promise<Participant | null>;
+  /**
+   * ログイン照合用にパスワードハッシュを取り出す。
+   * ハッシュを `Participant` 型に載せないことで、画面やAPIへ紛れ込む経路を型で塞ぐ。
+   */
+  getParticipantPasswordHash(participantId: string): Promise<string | null>;
+  setParticipantCredentials(
+    participantId: string,
+    input: { loginId?: string; passwordHash?: string },
+  ): Promise<Participant>;
   setParticipantRole(participantId: string, role: ParticipantRole): Promise<Participant>;
   setParticipantRoles(eventId: string, spyIds: string[]): Promise<Participant[]>;
 
