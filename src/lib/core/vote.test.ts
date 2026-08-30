@@ -10,6 +10,7 @@ function participant(id: string, role: Participant['role'] = 'AGENT'): Participa
     displayName: `agent-${id}`,
     affiliation: null,
     role,
+    loginId: null,
     joinedAt: '2026-01-01T00:00:00.000Z',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -63,7 +64,13 @@ describe('投票の検証', () => {
   });
 
   it('VOTING以外のフェーズでは投票できない', () => {
-    for (const phase of ['LOBBY', 'ACTIVE', 'SPY_MISSION_REVEALED', 'IDENTITY_REVEALED', 'FINISHED'] as const) {
+    for (const phase of [
+      'LOBBY',
+      'ACTIVE',
+      'SPY_MISSION_REVEALED',
+      'IDENTITY_REVEALED',
+      'FINISHED',
+    ] as const) {
       expect(validateVote({ ...base, phase })).toEqual({
         ok: false,
         reason: 'PHASE_NOT_VOTING',
@@ -91,10 +98,34 @@ describe('結果集計', () => {
     participant('p4', 'SPY'),
   ];
   const votes: Vote[] = [
-    { id: 'v1', eventId: 'ev1', voterParticipantId: 'p1', targetParticipantId: 'p2', createdAt: '' },
-    { id: 'v2', eventId: 'ev1', voterParticipantId: 'p2', targetParticipantId: 'p3', createdAt: '' },
-    { id: 'v3', eventId: 'ev1', voterParticipantId: 'p3', targetParticipantId: 'p2', createdAt: '' },
-    { id: 'v4', eventId: 'ev1', voterParticipantId: 'p4', targetParticipantId: 'p1', createdAt: '' },
+    {
+      id: 'v1',
+      eventId: 'ev1',
+      voterParticipantId: 'p1',
+      targetParticipantId: 'p2',
+      createdAt: '',
+    },
+    {
+      id: 'v2',
+      eventId: 'ev1',
+      voterParticipantId: 'p2',
+      targetParticipantId: 'p3',
+      createdAt: '',
+    },
+    {
+      id: 'v3',
+      eventId: 'ev1',
+      voterParticipantId: 'p3',
+      targetParticipantId: 'p2',
+      createdAt: '',
+    },
+    {
+      id: 'v4',
+      eventId: 'ev1',
+      voterParticipantId: 'p4',
+      targetParticipantId: 'p1',
+      createdAt: '',
+    },
   ];
 
   it('複数SPYの正体をすべて返す', () => {

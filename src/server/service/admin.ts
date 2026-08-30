@@ -13,6 +13,12 @@ import type {
 } from '@/lib/types';
 import { canRegister, isValidPhaseTransition, PHASE_META } from '@/lib/core/phase';
 import { GENERAL_MISSION_PRESETS, SPY_MISSION_PRESETS } from '@/lib/core/mission-presets';
+import {
+  generateLoginId,
+  generatePassword,
+  isValidLoginId,
+  normalizeLoginId,
+} from '@/lib/core/credentials';
 import { selectSpies } from '@/lib/core/spy';
 import { computeResults } from '@/lib/core/vote';
 import { appMode, appUrl, demoAdminCredentials, supabaseConfig } from '@/lib/env';
@@ -25,6 +31,7 @@ import {
   setAdminSession,
   type AdminSession,
 } from '@/server/auth/session';
+import { hashPassword } from '@/server/auth/password';
 import { DEMO_ADMIN_ID } from '@/server/demo/seed';
 import { sendPushToEvent } from '@/server/push/send';
 import type { EventInput, MissionInput } from '@/server/repo/types';
@@ -276,6 +283,7 @@ export interface AdminParticipantRow {
   total: number;
   hasVoted: boolean;
   votedFor: string | null;
+  loginId: string | null;
   joinedAt: string;
   /** この参加者専用の参加用URL。運営が本人に渡す */
   joinUrl: string;
@@ -303,6 +311,7 @@ export async function listAdminParticipants(eventId: string): Promise<AdminParti
       total: pr?.total ?? 0,
       hasVoted: Boolean(vote),
       votedFor: vote ? (nameById.get(vote.targetParticipantId) ?? null) : null,
+      loginId: p.loginId,
       joinedAt: p.joinedAt,
       joinUrl: buildJoinUrl(p.id, p.eventId),
     };
@@ -316,10 +325,50 @@ export async function listAdminParticipants(eventId: string): Promise<AdminParti
  * 受付を締め切っていても運営は追加できる（当日の飛び込みや代理受付のため）が、
  * 投票以降のフェーズでは公平性が壊れるので追加できない。
  */
+export interface IssuedCredentials {
+  loginId: string;
+  /** 平文はこの瞬間だけ返す。保存されるのはハッシュのみ */
+  password: string;
+}
+
+/**
+ * ログインIDを決める。
+ * 運営が指定していればそれを使い、していなければ重複しないものを自動生成する。
+ */
+async function resolveLoginId(eventId: string, requested?: string | null): Promise<string> {
+  const repo = getRepo();
+
+  if (requested && requested.trim()) {
+    const id = normalizeLoginId(requested);
+    if (!isValidLoginId(id)) {
+      throw new ServiceError(
+        'INVALID_LOGIN_ID',
+        'ログインIDは4〜24文字の半角英数字（-と_も可）で入力してください。',
+        400,
+      );
+    }
+    if (await repo.findParticipantByLoginId(eventId, id)) {
+      throw new ServiceError(
+        'LOGIN_ID_TAKEN',
+        'このログインIDはすでに使われています。別のIDにしてください。',
+        409,
+      );
+    }
+    return id;
+  }
+
+  // 自動生成。まれな衝突に備えて数回引き直す
+  for (let i = 0; i < 10; i += 1) {
+    const id = generateLoginId();
+    if (!(await repo.findParticipantByLoginId(eventId, id))) return id;
+  }
+  throw new ServiceError('LOGIN_ID_TAKEN', 'ログインIDを発行できませんでした。', 500);
+}
+
 export async function registerParticipant(
   eventId: string,
-  input: { displayName: string; affiliation?: string | null },
-): Promise<{ participant: Participant; joinUrl: string }> {
+  input: { displayName: string; affiliation?: string | null; loginId?: string | null },
+): Promise<{ participant: Participant; joinUrl: string; credentials: IssuedCredentials }> {
   const { event } = await requireEventAccess(eventId);
   if (!canRegister(event.phase)) {
     throw new ServiceError(
@@ -340,14 +389,50 @@ export async function registerParticipant(
     );
   }
 
+  const loginId = await resolveLoginId(eventId, input.loginId);
+  const password = generatePassword();
+
   const participant = await repo.createParticipant({
     eventId,
     displayName,
     affiliation: input.affiliation?.trim() || null,
+    loginId,
+    passwordHash: await hashPassword(password),
   });
   await repo.assignGeneralMissions(participant.id);
 
-  return { participant, joinUrl: buildJoinUrl(participant.id, eventId) };
+  return {
+    participant,
+    joinUrl: buildJoinUrl(participant.id, eventId),
+    credentials: { loginId, password },
+  };
+}
+
+/**
+ * パスワードを再発行する。
+ * 参加者がパスワードを忘れた／紙をなくした場合に、運営がその場で作り直せるようにする。
+ * 平文は返り値としてこの一度だけ返し、保存はハッシュのみ。
+ */
+export async function resetParticipantPassword(
+  eventId: string,
+  participantId: string,
+): Promise<IssuedCredentials> {
+  await requireEventAccess(eventId);
+  const repo = getRepo();
+  const participant = await repo.getParticipant(participantId);
+  if (!participant || participant.eventId !== eventId) {
+    throw new ServiceError('PARTICIPANT_NOT_FOUND', '参加者が見つかりません。', 404);
+  }
+
+  // 参加用リンクだけで登録された人には、この機会にIDも発行する
+  const loginId = participant.loginId ?? (await resolveLoginId(eventId, null));
+  const password = generatePassword();
+  await repo.setParticipantCredentials(participantId, {
+    loginId,
+    passwordHash: await hashPassword(password),
+  });
+
+  return { loginId, password };
 }
 
 /** 参加者ごとの参加用URL（この人専用の入口） */

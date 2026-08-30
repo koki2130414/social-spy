@@ -25,6 +25,7 @@ import {
   getResultForParticipant,
   joinEvent,
   listVoteCandidates,
+  loginParticipant,
   setMissionCompleted,
 } from './participant';
 import {
@@ -36,6 +37,7 @@ import {
   listAdminParticipants,
   registerParticipant,
   requireAdmin,
+  resetParticipantPassword,
 } from './admin';
 import { ServiceError } from '@/server/errors';
 import { demoAdminCredentials } from '@/lib/env';
@@ -350,6 +352,140 @@ describe('運営による参加者の代理登録', () => {
     await expect(
       registerParticipant(DEMO_EVENT_ID, { displayName: '遅刻者' }),
     ).rejects.toMatchObject({ code: 'PHASE_NOT_ACCEPTING' });
+  });
+});
+
+describe('運営が発行するIDとパスワード', () => {
+  it('登録するとIDとパスワードが発行され、そのIDでログインできる', async () => {
+    await loginAdmin();
+    const { participant, credentials } = await registerParticipant(DEMO_EVENT_ID, {
+      displayName: 'ログイン検証',
+    });
+
+    expect(credentials.loginId).toMatch(/^[a-z0-9_-]{4,24}$/);
+    expect(credentials.password.length).toBeGreaterThanOrEqual(6);
+
+    cookieJar.clear();
+    const result = await loginParticipant({
+      code: DEMO_EVENT_CODE,
+      loginId: credentials.loginId,
+      password: credentials.password,
+    });
+    expect(result.participantId).toBe(participant.id);
+
+    // ログイン後は自分の画面が開ける
+    const state = await getGameState();
+    expect(state.me.displayName).toBe('ログイン検証');
+  });
+
+  it('IDは大文字で入力しても通る', async () => {
+    await loginAdmin();
+    const { credentials } = await registerParticipant(DEMO_EVENT_ID, { displayName: '大文字検証' });
+
+    cookieJar.clear();
+    await expect(
+      loginParticipant({
+        code: DEMO_EVENT_CODE,
+        loginId: credentials.loginId.toUpperCase(),
+        password: credentials.password,
+      }),
+    ).resolves.toMatchObject({ eventId: DEMO_EVENT_ID });
+  });
+
+  it('パスワードが違えばログインできない', async () => {
+    await loginAdmin();
+    const { credentials } = await registerParticipant(DEMO_EVENT_ID, { displayName: '誤入力検証' });
+
+    cookieJar.clear();
+    await expect(
+      loginParticipant({
+        code: DEMO_EVENT_CODE,
+        loginId: credentials.loginId,
+        password: `${credentials.password}x`,
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+    await expect(getGameState()).rejects.toMatchObject({ code: 'NOT_AUTHENTICATED' });
+  });
+
+  it('存在しないIDでも、パスワード誤りと同じ応答にする', async () => {
+    cookieJar.clear();
+    const missing = await loginParticipant({
+      code: DEMO_EVENT_CODE,
+      loginId: 'agent-zzzz',
+      password: 'whatever-1',
+    }).catch((e) => e as ServiceError);
+    expect(missing).toBeInstanceOf(ServiceError);
+    expect((missing as ServiceError).code).toBe('INVALID_CREDENTIALS');
+    expect((missing as ServiceError).message).toBe('IDまたはパスワードが違います。');
+  });
+
+  it('平文パスワードはデータベースに残らない', async () => {
+    await loginAdmin();
+    const { participant, credentials } = await registerParticipant(DEMO_EVENT_ID, {
+      displayName: 'ハッシュ検証',
+    });
+
+    const stored = await getRepo().getParticipantPasswordHash(participant.id);
+    expect(stored).toBeTruthy();
+    expect(stored).not.toContain(credentials.password);
+    expect(stored).toMatch(/^scrypt\$/);
+  });
+
+  it('参加者一覧APIにパスワードハッシュは含まれない', async () => {
+    await loginAdmin();
+    await registerParticipant(DEMO_EVENT_ID, { displayName: '漏洩検証' });
+
+    const rows = await listAdminParticipants(DEMO_EVENT_ID);
+    const target = rows.find((r) => r.displayName === '漏洩検証');
+    expect(target?.loginId).toBeTruthy();
+    expect(JSON.stringify(rows)).not.toContain('scrypt$');
+  });
+
+  it('同じIDは二重に発行できない', async () => {
+    await loginAdmin();
+    await registerParticipant(DEMO_EVENT_ID, { displayName: 'ID指定A', loginId: 'sato-yuma' });
+    await expect(
+      registerParticipant(DEMO_EVENT_ID, { displayName: 'ID指定B', loginId: 'SATO-YUMA' }),
+    ).rejects.toMatchObject({ code: 'LOGIN_ID_TAKEN' });
+  });
+
+  it('パスワードを再発行すると古いパスワードでは入れない', async () => {
+    await loginAdmin();
+    const { participant, credentials } = await registerParticipant(DEMO_EVENT_ID, {
+      displayName: '再発行検証',
+    });
+
+    await loginAdmin();
+    const reissued = await resetParticipantPassword(DEMO_EVENT_ID, participant.id);
+    expect(reissued.loginId).toBe(credentials.loginId);
+    expect(reissued.password).not.toBe(credentials.password);
+
+    cookieJar.clear();
+    await expect(
+      loginParticipant({
+        code: DEMO_EVENT_CODE,
+        loginId: credentials.loginId,
+        password: credentials.password,
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+
+    await expect(
+      loginParticipant({
+        code: DEMO_EVENT_CODE,
+        loginId: reissued.loginId,
+        password: reissued.password,
+      }),
+    ).resolves.toMatchObject({ eventId: DEMO_EVENT_ID });
+  });
+
+  it('管理者でなければパスワードを再発行できない', async () => {
+    await loginAdmin();
+    const { participant } = await registerParticipant(DEMO_EVENT_ID, { displayName: '権限検証' });
+
+    cookieJar.clear();
+    await expect(resetParticipantPassword(DEMO_EVENT_ID, participant.id)).rejects.toMatchObject({
+      code: 'NOT_AUTHENTICATED',
+    });
   });
 });
 

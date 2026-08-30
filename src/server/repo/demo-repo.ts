@@ -22,13 +22,7 @@ import {
   DEMO_SPY_PARTICIPANT_ID,
   type DemoDataset,
 } from '@/server/demo/seed';
-import type {
-  EventInput,
-  MissionInput,
-  MissionProgress,
-  NotificationInput,
-  Repo,
-} from './types';
+import type { EventInput, MissionInput, MissionProgress, NotificationInput, Repo } from './types';
 
 /** event_admins 相当のキー */
 function adminKey(eventId: string, userId: string): string {
@@ -40,6 +34,8 @@ interface DemoState extends DemoDataset {
   interactiveParticipantIds: Set<string>;
   /** どの管理者がどのイベントを管理できるか（Supabaseの event_admins と同じ役割） */
   eventAdmins: Set<string>;
+  /** 参加者パスワードのハッシュ。Participant とは別に持ち、一覧へ混入させない */
+  participantPasswordHashes: Map<string, string>;
   pushSubscriptions: PushSubscriptionRecord[];
   seq: number;
 }
@@ -50,6 +46,7 @@ function createState(): DemoState {
     ...data,
     interactiveParticipantIds: new Set([DEMO_AGENT_PARTICIPANT_ID, DEMO_SPY_PARTICIPANT_ID]),
     eventAdmins: new Set(data.events.map((e) => adminKey(e.id, DEMO_ADMIN_ID))),
+    participantPasswordHashes: new Map(),
     pushSubscriptions: [],
     seq: 0,
   };
@@ -186,6 +183,8 @@ export class DemoRepo implements Repo {
     eventId: string;
     displayName: string;
     affiliation: string | null;
+    loginId?: string | null;
+    passwordHash?: string | null;
   }): Promise<Participant> {
     const p: Participant = {
       id: nextId('pt'),
@@ -193,6 +192,7 @@ export class DemoRepo implements Repo {
       displayName: input.displayName,
       affiliation: input.affiliation,
       role: 'AGENT',
+      loginId: input.loginId ?? null,
       joinedAt: now(),
       createdAt: now(),
       updatedAt: now(),
@@ -200,6 +200,34 @@ export class DemoRepo implements Repo {
     const s = state();
     s.participants.push(p);
     s.interactiveParticipantIds.add(p.id);
+    // ハッシュは Participant とは別に持ち、一覧などに紛れ込まないようにする
+    if (input.passwordHash) s.participantPasswordHashes.set(p.id, input.passwordHash);
+    return p;
+  }
+
+  async findParticipantByLoginId(eventId: string, loginId: string): Promise<Participant | null> {
+    const wanted = loginId.toLowerCase();
+    return (
+      state().participants.find(
+        (p) => p.eventId === eventId && (p.loginId ?? '').toLowerCase() === wanted,
+      ) ?? null
+    );
+  }
+
+  async getParticipantPasswordHash(participantId: string): Promise<string | null> {
+    return state().participantPasswordHashes.get(participantId) ?? null;
+  }
+
+  async setParticipantCredentials(
+    participantId: string,
+    input: { loginId?: string; passwordHash?: string },
+  ): Promise<Participant> {
+    const s = state();
+    const p = s.participants.find((x) => x.id === participantId);
+    if (!p) throw new Error('setParticipantCredentials: participant not found');
+    if (input.loginId !== undefined) p.loginId = input.loginId;
+    if (input.passwordHash !== undefined) s.participantPasswordHashes.set(p.id, input.passwordHash);
+    p.updatedAt = now();
     return p;
   }
 
@@ -274,7 +302,10 @@ export class DemoRepo implements Repo {
     s.participantMissions = s.participantMissions.filter((pm) => pm.missionId !== id);
   }
 
-  async listAssignedMissions(participantId: string, kind?: MissionKind): Promise<AssignedMission[]> {
+  async listAssignedMissions(
+    participantId: string,
+    kind?: MissionKind,
+  ): Promise<AssignedMission[]> {
     const s = state();
     return s.participantMissions
       .filter((pm) => pm.participantId === participantId)
@@ -322,7 +353,9 @@ export class DemoRepo implements Repo {
     if (!participant) throw new Error('PARTICIPANT_NOT_FOUND');
     const missions = await this.listMissions(participant.eventId);
     const existing = new Set(
-      s.participantMissions.filter((pm) => pm.participantId === participantId).map((pm) => pm.missionId),
+      s.participantMissions
+        .filter((pm) => pm.participantId === participantId)
+        .map((pm) => pm.missionId),
     );
     for (const a of pickSpyMissions(missions)) {
       if (existing.has(a.missionId)) continue;
