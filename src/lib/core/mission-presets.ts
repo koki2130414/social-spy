@@ -15,8 +15,16 @@ export interface MissionPreset {
 export const GENERAL_MISSION_PRESETS: MissionPreset[] = [
   { code: 'SNS EXCHANGE', title: 'SNS交換', body: '3人の参加者とSNSを交換せよ。' },
   { code: 'COMMON GROUND', title: '共通点の発見', body: '初対面の人と共通点を3つ見つけよ。' },
-  { code: 'CONNECT PEOPLE', title: '橋渡し', body: 'まだ話したことがない参加者同士を2人紹介せよ。' },
-  { code: 'NEW FIELD', title: '異分野接触', body: '自分とは異なるジャンルで活動している人と話せ。' },
+  {
+    code: 'CONNECT PEOPLE',
+    title: '橋渡し',
+    body: 'まだ話したことがない参加者同士を2人紹介せよ。',
+  },
+  {
+    code: 'NEW FIELD',
+    title: '異分野接触',
+    body: '自分とは異なるジャンルで活動している人と話せ。',
+  },
   { code: 'LOCAL INTEL', title: '現地情報の収集', body: '3人におすすめの店を聞け。' },
   { code: 'FUTURE PLAN', title: '将来計画の聴取', body: '2人に今後挑戦したいことを聞け。' },
   { code: 'FIRST CONTACT', title: '初接触', body: 'これまで話したことがない5人と会話せよ。' },
