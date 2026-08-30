@@ -24,7 +24,14 @@ import {
   listVoteCandidates,
   setMissionCompleted,
 } from './participant';
-import { adminLogin, changePhase, getAdminResult, listAdminParticipants } from './admin';
+import {
+  adminLogin,
+  changePhase,
+  createEvent,
+  getAdminResult,
+  getEvent,
+  listAdminParticipants,
+} from './admin';
 import { ServiceError } from '@/server/errors';
 import { demoAdminCredentials } from '@/lib/env';
 
@@ -219,6 +226,52 @@ describe('FINAL VOTE', () => {
     await expect(castVote(DEMO_SPY_PARTICIPANT_ID)).rejects.toMatchObject({
       code: 'NOT_AUTHENTICATED',
     });
+  });
+});
+
+describe('イベントの新規作成', () => {
+  const newEvent = {
+    name: 'AFTER PARTY vol.1',
+    code: 'NIGHT9',
+    startsAt: '2026-10-01T10:00:00.000Z',
+    durationMinutes: 60,
+    spyRevealOffsetMinutes: 30,
+    spyCount: 1,
+    registrationOpen: true,
+  };
+
+  it('作成したイベントを、作った本人がそのまま操作できる', async () => {
+    await loginAdmin();
+    const created = await createEvent(newEvent);
+
+    // 権限チェックを通る＝event_admins に登録されている
+    await expect(getEvent(created.id)).resolves.toMatchObject({ id: created.id });
+    await expect(changePhase(created.id, 'ACTIVE')).resolves.toMatchObject({ phase: 'ACTIVE' });
+  });
+
+  it('初期MISSIONが用意され、参加者に3件配布される', async () => {
+    await loginAdmin();
+    const created = await createEvent(newEvent);
+
+    const missions = await getRepo().listMissions(created.id);
+    expect(missions.filter((m) => m.kind === 'GENERAL')).toHaveLength(8);
+    expect(missions.filter((m) => m.kind === 'SPY')).toHaveLength(3);
+
+    // 実際に参加者を登録するとMISSIONが配られる
+    const { participantId } = await joinEvent({ code: 'NIGHT9', displayName: '新規参加者' });
+    const assigned = await getRepo().listAssignedMissions(participantId, 'GENERAL');
+    expect(assigned).toHaveLength(3);
+  });
+
+  it('既存のイベントコードは使い回せない', async () => {
+    await loginAdmin();
+    await expect(createEvent({ ...newEvent, code: DEMO_EVENT_CODE })).rejects.toMatchObject({
+      code: 'CODE_TAKEN',
+    });
+  });
+
+  it('管理者でなければイベントを作成できない', async () => {
+    await expect(createEvent(newEvent)).rejects.toMatchObject({ code: 'NOT_AUTHENTICATED' });
   });
 });
 
