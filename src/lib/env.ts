@@ -82,8 +82,20 @@ export function sessionSecret(): string {
   return 'social-spy-development-only-secret-key';
 }
 
+/**
+ * 参加用URLとQRコードのベースURL。
+ *  1. NEXT_PUBLIC_APP_URL（独自ドメインを使う場合はこれを設定する）
+ *  2. Vercel が自動で渡すドメイン（設定不要でデプロイ先を正しく指す）
+ *  3. ローカル開発
+ */
 export function appUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || 'http://localhost:3000';
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '');
+  if (explicit) return explicit;
+
+  const hosted = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  if (hosted) return `https://${hosted.replace(/\/$/, '')}`;
+
+  return 'http://localhost:3000';
 }
 
 export function demoAdminCredentials(): { email: string; password: string } {
