@@ -48,6 +48,8 @@ export interface Participant {
   affiliation: string | null;
   /** 機密。参加者向けレスポンスに含めてはならない */
   role: ParticipantRole;
+  /** 運営が発行したログインID。未発行なら null（参加用リンクのみで入る人） */
+  loginId: string | null;
   joinedAt: string;
   createdAt: string;
   updatedAt: string;
