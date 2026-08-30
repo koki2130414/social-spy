@@ -115,4 +115,9 @@ export interface Repo {
 
   /* ----------------- admin ---------------- */
   isEventAdmin(eventId: string, adminId: string): Promise<boolean>;
+  /**
+   * イベントの管理者を追加する。
+   * イベント作成直後にこれを呼ばないと、作った本人が自分のイベントを操作できなくなる。
+   */
+  addEventAdmin(eventId: string, userId: string): Promise<void>;
 }
