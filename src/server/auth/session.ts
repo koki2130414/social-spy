@@ -75,7 +75,12 @@ export async function setParticipantSession(pid: string, eid: string): Promise<v
 
 export async function getParticipantSession(): Promise<ParticipantSession | null> {
   const store = await cookies();
-  return verifyToken<ParticipantSession>(store.get(PARTICIPANT_COOKIE)?.value);
+  const payload = verifyToken<ParticipantSession & { typ?: string }>(
+    store.get(PARTICIPANT_COOKIE)?.value,
+  );
+  // 参加用リンクのトークンをそのままセッションCookieとして使わせない（種類の取り違え防止）
+  if (!payload || payload.typ) return null;
+  return payload;
 }
 
 export async function clearParticipantSession(): Promise<void> {
@@ -96,4 +101,34 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 export async function clearAdminSession(): Promise<void> {
   const store = await cookies();
   store.delete(ADMIN_COOKIE);
+}
+
+/* -------------------------------------------------------------------------
+ * 参加用リンク
+ *
+ * 運営が参加者を代理登録したときに配る、その人専用のURLに埋め込むトークン。
+ * リンクを開くと参加者セッションが発行され、自分の画面に入れる。
+ *
+ * 有効期限は持たせない。イベント当日までに配れるようにするためで、
+ * 扱いはイベントのQRコードと同じ（渡した相手だけが使う前提）。
+ * 無効化したいときは、その参加者を削除する。
+ * ---------------------------------------------------------------------- */
+
+const JOIN_TOKEN_TYPE = 'join';
+
+export interface JoinTokenPayload {
+  typ: typeof JOIN_TOKEN_TYPE;
+  pid: string;
+  eid: string;
+}
+
+export function createJoinToken(pid: string, eid: string): string {
+  return createToken({ typ: JOIN_TOKEN_TYPE, pid, eid });
+}
+
+export function verifyJoinToken(token: string | undefined | null): JoinTokenPayload | null {
+  const payload = verifyToken<JoinTokenPayload>(token);
+  if (!payload || payload.typ !== JOIN_TOKEN_TYPE) return null;
+  if (!payload.pid || !payload.eid) return null;
+  return payload;
 }
