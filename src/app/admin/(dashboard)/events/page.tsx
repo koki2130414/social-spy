@@ -112,8 +112,8 @@ export default function AdminEventsPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="label-mono">EVENTS</p>
-          <h1 className="headline-mono mt-1 text-xl">イベント設定</h1>
+          <p className="label-mono">イベント設定</p>
+          <h1 className="headline-mono mt-1 text-xl">開催日時とSPY人数</h1>
         </div>
         <Button variant="outline" onClick={startCreate}>
           <Plus className="h-4 w-4" aria-hidden />
@@ -235,7 +235,7 @@ export default function AdminEventsPage() {
         </form>
 
         <aside className="space-y-4 rounded-sm border border-border bg-card p-5">
-          <p className="label-mono">JOIN QR / URL</p>
+          <p className="label-mono">参加用QR / URL</p>
           {qr ? (
             <>
               <div className="rounded-sm bg-white p-3">
