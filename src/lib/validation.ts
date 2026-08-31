@@ -86,6 +86,12 @@ export const notificationSchema = z.object({
 });
 export type NotificationFormValues = z.infer<typeof notificationSchema>;
 
+/** 運営メンバーの招待 */
+export const memberInviteSchema = z.object({
+  email: z.string().trim().email('メールアドレスの形式が正しくありません。').max(255),
+});
+export type MemberInviteValues = z.infer<typeof memberInviteSchema>;
+
 export const phaseSchema = z.object({
   to: z.enum(GAME_PHASES),
 });
