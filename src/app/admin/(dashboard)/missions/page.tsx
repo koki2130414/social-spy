@@ -173,7 +173,7 @@ export default function AdminMissionsPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="label-mono">MISSIONS</p>
+          <p className="label-mono">MISSION</p>
           <h1 className="headline-mono mt-1 text-xl">MISSION管理</h1>
         </div>
         <Button variant="intel" disabled={busy} onClick={distribute}>
