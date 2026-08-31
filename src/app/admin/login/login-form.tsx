@@ -38,12 +38,12 @@ export function AdminLoginForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-5" noValidate>
       <div className="space-y-2">
-        <Label htmlFor="email">EMAIL</Label>
+        <Label htmlFor="email">メールアドレス</Label>
         <Input id="email" type="email" autoComplete="username" {...register('email')} />
         {errors.email ? <p className="text-xs text-primary">{errors.email.message}</p> : null}
       </div>
       <div className="space-y-2">
-        <Label htmlFor="password">PASSWORD</Label>
+        <Label htmlFor="password">パスワード</Label>
         <Input
           id="password"
           type="password"
