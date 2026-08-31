@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Loader2,
   LogOut,
+  ShieldCheck,
   Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,7 @@ const NAV = [
   { href: '/admin/missions', label: 'MISSIONS', icon: ClipboardList },
   { href: '/admin/notifications', label: 'NOTIFY', icon: Bell },
   { href: '/admin/results', label: 'RESULTS', icon: BarChart3 },
+  { href: '/admin/members', label: 'MEMBERS', icon: ShieldCheck },
 ];
 
 export function AdminShell({
@@ -67,7 +69,8 @@ export function AdminShell({
       setEvents(res.events);
       setEventIdState((current) => {
         if (current && res.events.some((e) => e.id === current)) return current;
-        const stored = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null;
+        const stored =
+          typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null;
         if (stored && res.events.some((e) => e.id === stored)) return stored;
         return res.events[0]?.id ?? null;
       });
@@ -162,7 +165,7 @@ export function AdminShell({
               id="admin-event"
               value={eventId ?? ''}
               onChange={(e) => setEventId(e.target.value)}
-              className="min-h-[44px] flex-1 rounded-sm border border-input bg-background px-3 text-sm sm:flex-none sm:min-w-[280px]"
+              className="min-h-[44px] flex-1 rounded-sm border border-input bg-background px-3 text-sm sm:min-w-[280px] sm:flex-none"
             >
               {events.length === 0 ? <option value="">（イベントがありません）</option> : null}
               {events.map((e) => (
@@ -180,10 +183,16 @@ export function AdminShell({
           <main className="p-4 sm:p-6">
             {loading ? (
               <div className="flex justify-center py-20">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="読み込み中" />
+                <Loader2
+                  className="h-6 w-6 animate-spin text-muted-foreground"
+                  aria-label="読み込み中"
+                />
               </div>
             ) : error ? (
-              <p role="alert" className="border border-primary/50 bg-primary/10 p-3 text-sm text-primary">
+              <p
+                role="alert"
+                className="border border-primary/50 bg-primary/10 p-3 text-sm text-primary"
+              >
                 {error}
               </p>
             ) : (

@@ -39,6 +39,7 @@ import {
   requireAdmin,
   resetParticipantPassword,
 } from './admin';
+import { canRevokeMember, inviteAdminMember, listAdminMembers, revokeAdminMember } from './members';
 import { ServiceError } from '@/server/errors';
 import { demoAdminCredentials } from '@/lib/env';
 
@@ -486,6 +487,47 @@ describe('運営が発行するIDとパスワード', () => {
     await expect(resetParticipantPassword(DEMO_EVENT_ID, participant.id)).rejects.toMatchObject({
       code: 'NOT_AUTHENTICATED',
     });
+  });
+});
+
+describe('運営メンバーの管理', () => {
+  it('管理者以外は運営メンバー一覧を見られない', async () => {
+    cookieJar.clear();
+    await expect(listAdminMembers()).rejects.toMatchObject({ code: 'NOT_AUTHENTICATED' });
+  });
+
+  it('管理者以外は招待できない', async () => {
+    cookieJar.clear();
+    await expect(inviteAdminMember('staff@example.com')).rejects.toMatchObject({
+      code: 'NOT_AUTHENTICATED',
+    });
+  });
+
+  it('管理者以外は権限を外せない', async () => {
+    cookieJar.clear();
+    await expect(revokeAdminMember('someone')).rejects.toMatchObject({
+      code: 'NOT_AUTHENTICATED',
+    });
+  });
+
+  it('デモモードでは招待できない（本番用の認証と混ざらないようにする）', async () => {
+    await loginAdmin();
+    await expect(inviteAdminMember('staff@example.com')).rejects.toMatchObject({
+      code: 'DEMO_UNSUPPORTED',
+    });
+  });
+
+  it('自分自身の運営権限は外せない', () => {
+    // 全員が締め出される事故を防ぐための不変条件
+    expect(canRevokeMember('user-a', 'user-a')).toBe(false);
+    expect(canRevokeMember('user-a', 'user-b')).toBe(true);
+  });
+
+  it('デモモードでも一覧は自分だけ返り、権限判定は本番と同じ経路を通る', async () => {
+    await loginAdmin();
+    const members = await listAdminMembers();
+    expect(members).toHaveLength(1);
+    expect(members[0].isSelf).toBe(true);
   });
 });
 
