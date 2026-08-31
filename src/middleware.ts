@@ -10,7 +10,10 @@ const ADMIN_COOKIE = 'spy_admin';
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith('/admin') && pathname !== '/admin/login') {
+  // 招待メールから来る人はまだログインしていないので、ここは素通しにする
+  const ADMIN_PUBLIC_PATHS = ['/admin/login', '/admin/set-password'];
+
+  if (pathname.startsWith('/admin') && !ADMIN_PUBLIC_PATHS.includes(pathname)) {
     if (!request.cookies.get(ADMIN_COOKIE)) {
       const url = request.nextUrl.clone();
       url.pathname = '/admin/login';
