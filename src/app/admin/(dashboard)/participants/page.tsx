@@ -183,7 +183,7 @@ export default function AdminParticipantsPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="label-mono">PARTICIPANTS</p>
+          <p className="label-mono">参加者</p>
           <h1 className="headline-mono mt-1 text-xl">参加者一覧</h1>
         </div>
         <Button variant="outline" disabled={busy} onClick={() => setConfirmAuto(true)}>
@@ -273,7 +273,7 @@ export default function AdminParticipantsPage() {
                 </div>
               </div>
               <div className="space-y-1">
-                <p className="label-mono">PASSWORD</p>
+                <p className="label-mono">パスワード</p>
                 <div className="flex items-center gap-2">
                   <code className="min-w-0 flex-1 break-all rounded-sm bg-background px-2 py-1 font-mono text-sm text-foreground">
                     {added.password}
