@@ -74,8 +74,8 @@ export default function AdminNotificationsPage() {
   return (
     <div className="space-y-6">
       <header>
-        <p className="label-mono">NOTIFICATIONS</p>
-        <h1 className="headline-mono mt-1 text-xl">全体通知</h1>
+        <p className="label-mono">全体通知</p>
+        <h1 className="headline-mono mt-1 text-xl">参加者全員へのお知らせ</h1>
       </header>
 
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">

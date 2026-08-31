@@ -59,11 +59,11 @@ export default function AdminResultsPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="label-mono">RESULTS</p>
-          <h1 className="headline-mono mt-1 text-xl">投票結果</h1>
+          <p className="label-mono">投票結果</p>
+          <h1 className="headline-mono mt-1 text-xl">得票とSPYの正体</h1>
         </div>
         {data.identityRevealed ? (
-          <Badge variant="danger">IDENTITY REVEALED</Badge>
+          <Badge variant="danger">参加者に公開済み</Badge>
         ) : (
           <Badge variant="outline">未公開</Badge>
         )}

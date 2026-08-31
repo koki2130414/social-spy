@@ -14,7 +14,7 @@ export default function SetPasswordPage() {
   return (
     <main className="mx-auto w-full max-w-md px-4 py-14">
       <header className="mb-8 space-y-3">
-        <p className="label-mono">CREDENTIAL SETUP</p>
+        <p className="label-mono">パスワードの設定</p>
         <SpyLogo />
         <p className="text-sm text-muted-foreground">
           運営者アカウントのパスワードを設定してください。

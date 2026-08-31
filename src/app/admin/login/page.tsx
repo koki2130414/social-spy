@@ -18,7 +18,7 @@ export default async function AdminLoginPage() {
   return (
     <main className="mx-auto w-full max-w-md px-4 py-14">
       <header className="mb-8 space-y-3">
-        <p className="label-mono">RESTRICTED AREA</p>
+        <p className="label-mono">関係者以外立入禁止</p>
         <SpyLogo />
         <p className="text-sm text-muted-foreground">運営者専用の管理コンソールです。</p>
       </header>
@@ -29,7 +29,7 @@ export default async function AdminLoginPage() {
 
       {demo ? (
         <div className="mt-6 space-y-1 rounded-sm border border-dashed border-border p-4 text-xs">
-          <p className="label-mono">DEMO CREDENTIALS</p>
+          <p className="label-mono">デモ用のログイン情報</p>
           <p className="font-mono text-foreground/80">{creds.email}</p>
           <p className="font-mono text-foreground/80">{creds.password}</p>
         </div>

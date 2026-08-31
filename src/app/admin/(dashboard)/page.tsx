@@ -32,12 +32,34 @@ interface Dashboard {
   joinUrl: string;
 }
 
-const ACTIONS: Array<{ to: GamePhase; label: string; icon: typeof Play; danger?: boolean }> = [
-  { to: 'ACTIVE', label: 'ゲーム開始 / OPERATION START', icon: Play },
-  { to: 'SPY_MISSION_REVEALED', label: 'SPY MISSION公開', icon: ScanEye },
-  { to: 'VOTING', label: '投票開始 / OPERATION TERMINATED', icon: VoteIcon, danger: true },
-  { to: 'IDENTITY_REVEALED', label: '正体公開 / IDENTITY REVEAL', icon: ShieldAlert, danger: true },
-  { to: 'FINISHED', label: 'ゲーム終了', icon: Flag },
+/**
+ * 進行ボタン。
+ * 押すと参加者へ通知が飛ぶので、参加者側に表示される見出しも併記しておく
+ * （運営が「今どれを押したか」を参加者の画面と突き合わせられるようにするため）。
+ */
+const ACTIONS: Array<{
+  to: GamePhase;
+  label: string;
+  sent: string;
+  icon: typeof Play;
+  danger?: boolean;
+}> = [
+  { to: 'ACTIVE', label: 'ゲーム開始', sent: 'OPERATION START', icon: Play },
+  {
+    to: 'SPY_MISSION_REVEALED',
+    label: 'SPY MISSIONを公開',
+    sent: 'SPY MISSION REVEALED',
+    icon: ScanEye,
+  },
+  { to: 'VOTING', label: '投票を開始', sent: 'OPERATION TERMINATED', icon: VoteIcon, danger: true },
+  {
+    to: 'IDENTITY_REVEALED',
+    label: 'SPYの正体を公開',
+    sent: 'IDENTITY REVEAL',
+    icon: ShieldAlert,
+    danger: true,
+  },
+  { to: 'FINISHED', label: 'ゲーム終了', sent: 'MISSION COMPLETE', icon: Flag },
 ];
 
 function StatTile({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
@@ -98,10 +120,10 @@ export default function AdminDashboardPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="label-mono">DASHBOARD</p>
+          <p className="label-mono">ダッシュボード</p>
           <h1 className="headline-mono mt-1 text-xl">{event.name}</h1>
         </div>
-        <PhaseBadge phase={event.phase} />
+        <PhaseBadge phase={event.phase} japanese />
       </header>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
@@ -132,7 +154,7 @@ export default function AdminDashboardPage() {
 
       {data.latestNotification ? (
         <section className="rounded-sm border border-border bg-card p-4">
-          <p className="label-mono">LATEST NOTIFICATION</p>
+          <p className="label-mono">最新の通知</p>
           <p className="headline-mono mt-2 text-sm text-amber">{data.latestNotification.title}</p>
           <p className="mt-1 text-sm text-muted-foreground">{data.latestNotification.body}</p>
         </section>
@@ -141,7 +163,7 @@ export default function AdminDashboardPage() {
       <section>
         <div className="mb-3 flex items-center gap-2">
           <Timer className="h-4 w-4 text-muted-foreground" aria-hidden />
-          <p className="label-mono">GAME CONTROL</p>
+          <p className="label-mono">ゲーム進行</p>
         </div>
 
         {actionError ? (
@@ -169,7 +191,12 @@ export default function AdminDashboardPage() {
                 ) : (
                   <Icon className="h-4 w-4" aria-hidden />
                 )}
-                <span className="truncate">{action.label}</span>
+                <span className="min-w-0 flex-1 text-left">
+                  <span className="block truncate">{action.label}</span>
+                  <span className="block truncate text-[10px] font-normal opacity-70">
+                    参加者への通知: {action.sent}
+                  </span>
+                </span>
               </Button>
             );
           })}
@@ -187,7 +214,7 @@ export default function AdminDashboardPage() {
               {confirm ? (
                 <>
                   <span className="headline-mono block py-2 text-base text-foreground">
-                    {PHASE_META[event.phase].headline} → {PHASE_META[confirm].headline}
+                    {PHASE_META[event.phase].label} → {PHASE_META[confirm].label}
                   </span>
                   {PHASE_META[confirm].description}
                   <br />

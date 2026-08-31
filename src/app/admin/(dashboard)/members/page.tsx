@@ -92,8 +92,8 @@ export default function AdminMembersPage() {
   return (
     <div className="space-y-6">
       <header>
-        <p className="label-mono">MEMBERS</p>
-        <h1 className="headline-mono mt-1 text-xl">運営メンバー</h1>
+        <p className="label-mono">運営メンバー</p>
+        <h1 className="headline-mono mt-1 text-xl">管理画面に入れる人</h1>
       </header>
 
       {actionError ? (

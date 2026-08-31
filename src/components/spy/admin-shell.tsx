@@ -40,13 +40,13 @@ export function useAdmin(): AdminContextValue {
 }
 
 const NAV = [
-  { href: '/admin', label: 'DASHBOARD', icon: LayoutDashboard },
-  { href: '/admin/events', label: 'EVENTS', icon: CalendarCog },
-  { href: '/admin/participants', label: 'PARTICIPANTS', icon: Users },
-  { href: '/admin/missions', label: 'MISSIONS', icon: ClipboardList },
-  { href: '/admin/notifications', label: 'NOTIFY', icon: Bell },
-  { href: '/admin/results', label: 'RESULTS', icon: BarChart3 },
-  { href: '/admin/members', label: 'MEMBERS', icon: ShieldCheck },
+  { href: '/admin', label: 'ダッシュボード', icon: LayoutDashboard },
+  { href: '/admin/events', label: 'イベント設定', icon: CalendarCog },
+  { href: '/admin/participants', label: '参加者', icon: Users },
+  { href: '/admin/missions', label: 'MISSION', icon: ClipboardList },
+  { href: '/admin/notifications', label: '全体通知', icon: Bell },
+  { href: '/admin/results', label: '投票結果', icon: BarChart3 },
+  { href: '/admin/members', label: '運営メンバー', icon: ShieldCheck },
 ];
 
 export function AdminShell({
@@ -114,7 +114,7 @@ export function AdminShell({
           <div className="flex items-center justify-between p-4 lg:block">
             <div>
               <SpyLogo compact />
-              <p className="label-mono mt-1">CONTROL ROOM</p>
+              <p className="label-mono mt-1">運営コンソール</p>
             </div>
             <Badge variant="outline" className="lg:mt-3">
               {adminName}
@@ -159,7 +159,7 @@ export function AdminShell({
           {/* イベント選択 */}
           <div className="flex flex-wrap items-center gap-3 border-b border-border bg-background/95 px-4 py-3">
             <label htmlFor="admin-event" className="label-mono">
-              EVENT
+              イベント
             </label>
             <select
               id="admin-event"
