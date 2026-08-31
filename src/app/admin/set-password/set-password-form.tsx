@@ -142,13 +142,13 @@ export function SetPasswordForm({ url, anonKey }: { url: string; anonKey: string
     <form onSubmit={submit} className="space-y-6" noValidate>
       {email ? (
         <div className="space-y-1">
-          <p className="label-mono">ACCOUNT</p>
+          <p className="label-mono">アカウント</p>
           <p className="font-mono text-sm text-foreground">{email}</p>
         </div>
       ) : null}
 
       <div className="space-y-2">
-        <Label htmlFor="new-password">PASSWORD / パスワード（8文字以上）</Label>
+        <Label htmlFor="new-password">パスワード（8文字以上）</Label>
         <Input
           id="new-password"
           type="password"
@@ -159,7 +159,7 @@ export function SetPasswordForm({ url, anonKey }: { url: string; anonKey: string
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="confirm-password">CONFIRM / 確認のためもう一度</Label>
+        <Label htmlFor="confirm-password">確認のためもう一度</Label>
         <Input
           id="confirm-password"
           type="password"
