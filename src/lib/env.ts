@@ -71,7 +71,7 @@ export function sessionSecret(): string {
         Math.random().toString(36).slice(2),
       ).join('');
       console.warn(
-        '[SOCIAL SPY] SPY_SESSION_SECRET が未設定のため、一時的な鍵を生成しました。' +
+        '[BUZZ BASE] SPY_SESSION_SECRET が未設定のため、一時的な鍵を生成しました。' +
           '本番運用では必ず環境変数を設定してください。',
       );
     }

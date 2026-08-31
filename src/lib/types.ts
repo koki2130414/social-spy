@@ -1,5 +1,5 @@
 /**
- * SOCIAL SPY - ドメイン型定義
+ * BUZZ BASE - ドメイン型定義
  *
  * 重要:
  *  - `Participant` は role を含む「機密」型。参加者向けAPIからは絶対に返さない。

@@ -48,7 +48,7 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
-        // SOCIAL SPY signature palette
+        // BUZZ BASE signature palette
         intel: {
           DEFAULT: 'hsl(var(--intel))',
           foreground: 'hsl(var(--intel-foreground))',
