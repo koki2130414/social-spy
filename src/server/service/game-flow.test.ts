@@ -7,10 +7,15 @@ import { resetDemoState } from '@/server/repo/demo-repo';
 import { getRepo } from '@/server/repo';
 import {
   ADMIN_COOKIE,
+  ADMIN_SETUP_TOKEN_MAX_AGE_MS,
   PARTICIPANT_COOKIE,
   clearAdminSession,
+  createAdminSetupToken,
+  createJoinToken,
+  createToken,
   setAdminSession,
   setParticipantSession,
+  verifyAdminSetupToken,
   verifyJoinToken,
 } from '@/server/auth/session';
 import {
@@ -39,7 +44,13 @@ import {
   requireAdmin,
   resetParticipantPassword,
 } from './admin';
-import { canRevokeMember, inviteAdminMember, listAdminMembers, revokeAdminMember } from './members';
+import {
+  canRevokeMember,
+  completeAdminSetup,
+  inviteAdminMember,
+  listAdminMembers,
+  revokeAdminMember,
+} from './members';
 import { ServiceError } from '@/server/errors';
 import { demoAdminCredentials } from '@/lib/env';
 
@@ -528,6 +539,50 @@ describe('運営メンバーの管理', () => {
     const members = await listAdminMembers();
     expect(members).toHaveLength(1);
     expect(members[0].isSelf).toBe(true);
+  });
+});
+
+describe('運営者のパスワード設定リンク', () => {
+  it('発行したリンクは本人を指し、期限内なら有効', () => {
+    const token = createAdminSetupToken('user-1');
+    expect(verifyAdminSetupToken(token)).toMatchObject({ uid: 'user-1' });
+  });
+
+  it('期限を過ぎたリンクは無効になる', () => {
+    const token = createAdminSetupToken('user-1');
+    const afterExpiry = Date.now() + ADMIN_SETUP_TOKEN_MAX_AGE_MS + 1000;
+    expect(verifyAdminSetupToken(token, afterExpiry)).toBeNull();
+  });
+
+  it('改ざんしたリンクは無効になる', () => {
+    const token = createAdminSetupToken('user-1');
+    const [payload, signature] = token.split('.');
+    const broken = `${payload}.${signature.slice(0, -1)}${signature.at(-1) === 'A' ? 'B' : 'A'}`;
+    expect(verifyAdminSetupToken(broken)).toBeNull();
+
+    // 中身を差し替えても署名が合わない
+    const forged = Buffer.from(
+      JSON.stringify({ typ: 'admin-setup', uid: 'someone-else', exp: Date.now() + 1000 }),
+    ).toString('base64url');
+    expect(verifyAdminSetupToken(`${forged}.${signature}`)).toBeNull();
+  });
+
+  it('参加用リンクのトークンでは運営パスワードを設定できない', () => {
+    // 種類の取り違えで、参加者が管理者になれてしまわないこと
+    const joinToken = createJoinToken(DEMO_AGENT_PARTICIPANT_ID, DEMO_EVENT_ID);
+    expect(verifyAdminSetupToken(joinToken)).toBeNull();
+  });
+
+  it('署名が正しくても、種類が違うトークンは受け付けない', () => {
+    // 同じ鍵で署名された別用途のトークンを流用されないこと
+    const other = createToken({ typ: 'something-else', uid: 'user-1', exp: Date.now() + 60_000 });
+    expect(verifyAdminSetupToken(other)).toBeNull();
+  });
+
+  it('無効なリンクではパスワードを設定できない', async () => {
+    await expect(completeAdminSetup('not-a-token', 'password123')).rejects.toMatchObject({
+      code: 'SETUP_LINK_INVALID',
+    });
   });
 });
 
