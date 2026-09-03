@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ClipboardList, EyeOff, Home, Loader2, Trophy, Vote, WifiOff } from 'lucide-react';
+import { IntroGate } from './intro-gate';
 import { useGameState, type GameStateResult } from '@/hooks/use-game-state';
 import { useOnlineStatus } from '@/hooks/use-online-status';
 import { PHASE_META, canVoteInPhase, isIdentityRevealed, isSpyMissionPublic } from '@/lib/core/phase';
@@ -162,6 +163,9 @@ export function GameShell({ children }: { children: React.ReactNode }) {
             オフラインです。記録した達成は復帰後に自動送信されます。
           </p>
         ) : null}
+
+        {/* 初めてゲーム画面に入った人にオープニングを流す（自動再生はここ1か所だけ） */}
+        <IntroGate autoPlay showRewatch={false} />
 
         <main className="mx-auto w-full max-w-lg flex-1 px-4 pb-28 pt-5">{children}</main>
 
