@@ -3,6 +3,7 @@ import { Fingerprint, ScanEye, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SpyLogo } from '@/components/spy/logo';
 import { ClassifiedPanel } from '@/components/spy/classified-panel';
+import { IntroGate } from '@/components/spy/intro-gate';
 import { isDemoModeEnabled } from '@/lib/env';
 
 export const dynamic = 'force-dynamic';
@@ -17,6 +18,7 @@ export default function HomePage() {
           <p className="label-mono">CLASSIFIED / LEVEL 4</p>
           <SpyLogo />
           <p className="text-sm text-muted-foreground">交流を、ゲームにする。</p>
+          <IntroGate />
         </header>
 
         <ClassifiedPanel className="p-5" stamp="CLASSIFIED" tone="danger">
