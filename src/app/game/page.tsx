@@ -9,6 +9,7 @@ import { ClassifiedPanel } from '@/components/spy/classified-panel';
 import { useGame } from '@/components/spy/game-shell';
 import { InstallPrompt } from '@/components/pwa/install-prompt';
 import { PushToggle } from '@/components/pwa/push-toggle';
+import { IntroGate } from '@/components/spy/intro-gate';
 import { PHASE_META, participantPrimaryAction } from '@/lib/core/phase';
 
 export default function GameHomePage() {
@@ -116,6 +117,12 @@ export default function GameHomePage() {
       <section>
         <p className="label-mono mb-2">Alerts</p>
         <PushToggle />
+      </section>
+
+      <section>
+        <p className="label-mono mb-2">はじめての方へ</p>
+        {/* 自動再生は GameShell 側で1回だけ。ここは見直し用 */}
+        <IntroGate autoPlay={false} label="遊び方の映像をもう一度見る" />
       </section>
 
       <section className="flex flex-wrap items-center gap-2 pt-2">

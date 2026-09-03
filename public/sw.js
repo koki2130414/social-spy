@@ -63,6 +63,8 @@ function shouldBypass(request, url) {
   if (url.origin !== self.location.origin) return true;
   if (url.pathname.startsWith('/api/')) return true;
   if (url.pathname.startsWith('/admin')) return true;
+  // オープニング映像は大きく、途中再生で Range リクエストになるためキャッシュしない
+  if (url.pathname.startsWith('/intro/')) return true;
   // React Server Components のペイロードは常にネットワークから取る
   if (url.searchParams.has('_rsc')) return true;
   if (request.headers.get('RSC') === '1') return true;
