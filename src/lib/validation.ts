@@ -92,6 +92,15 @@ export const memberInviteSchema = z.object({
 });
 export type MemberInviteValues = z.infer<typeof memberInviteSchema>;
 
+/** パスワード設定リンクからのパスワード設定 */
+export const adminSetupSchema = z.object({
+  token: z.string().min(1),
+  password: z
+    .string()
+    .min(8, 'パスワードは8文字以上にしてください。')
+    .max(72, 'パスワードが長すぎます。'),
+});
+
 export const phaseSchema = z.object({
   to: z.enum(GAME_PHASES),
 });

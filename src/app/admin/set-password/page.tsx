@@ -1,15 +1,18 @@
 import Link from 'next/link';
+import { AlertTriangle } from 'lucide-react';
 import { SpyLogo } from '@/components/spy/logo';
 import { ClassifiedPanel } from '@/components/spy/classified-panel';
-import { supabaseConfig } from '@/lib/env';
 import { SetPasswordForm } from './set-password-form';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'パスワードの設定' };
 
-export default function SetPasswordPage() {
-  // どちらも NEXT_PUBLIC_ の公開値。ブラウザへ渡してよい
-  const { url, anonKey } = supabaseConfig();
+export default async function SetPasswordPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ t?: string }>;
+}) {
+  const { t } = await searchParams;
 
   return (
     <main className="mx-auto w-full max-w-md px-4 py-14">
@@ -22,12 +25,19 @@ export default function SetPasswordPage() {
       </header>
 
       <ClassifiedPanel className="p-5" tone="intel">
-        {url && anonKey ? (
-          <SetPasswordForm url={url} anonKey={anonKey} />
+        {t ? (
+          <SetPasswordForm token={t} />
         ) : (
-          <p className="text-sm text-primary">
-            この環境ではパスワード設定を利用できません（Supabaseが未設定です）。
-          </p>
+          <div
+            role="alert"
+            className="flex items-start gap-2 border border-primary/50 bg-primary/10 p-3 text-sm text-primary"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            <span>
+              このページは、運営者から渡されたパスワード設定リンクから開いてください。
+              リンクが見つからない場合は再発行を依頼してください。
+            </span>
+          </div>
         )}
       </ClassifiedPanel>
 
