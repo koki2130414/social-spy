@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, MailPlus, ShieldCheck, ShieldOff } from 'lucide-react';
+import { Copy, Loader2, ShieldCheck, ShieldOff, UserRoundPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -46,6 +46,8 @@ export default function AdminMembersPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<Member | null>(null);
+  const [issued, setIssued] = useState<{ email: string; setupUrl: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const members = data?.members ?? [];
 
@@ -56,20 +58,32 @@ export default function AdminMembersPage() {
     setActionError(null);
     setNotice(null);
     try {
-      const res = await apiSend<{ email: string; alreadyExisted: boolean }>('/api/admin/members', {
-        email,
-      });
+      const res = await apiSend<{ email: string; alreadyExisted: boolean; setupUrl: string }>(
+        '/api/admin/members',
+        { email },
+      );
+      setIssued({ email: res.email, setupUrl: res.setupUrl });
       setNotice(
         res.alreadyExisted
-          ? `${res.email} は既にアカウントがあったため、運営権限だけを付与しました。`
-          : `${res.email} に招待メールを送りました。本人がリンクからパスワードを設定するとログインできます。`,
+          ? `${res.email} は既にアカウントがありました。運営権限を付け直しました。`
+          : `${res.email} を運営メンバーに追加しました。`,
       );
       setEmail('');
       await refresh();
     } catch (e2) {
-      setActionError(e2 instanceof ApiError ? e2.message : '招待できませんでした。');
+      setActionError(e2 instanceof ApiError ? e2.message : '追加できませんでした。');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const copySetupUrl = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setActionError('コピーできませんでした。URLを長押しして選択してください。');
     }
   };
 
@@ -106,10 +120,11 @@ export default function AdminMembersPage() {
       ) : null}
 
       <section className="rounded-sm border border-border bg-card p-5">
-        <p className="label-mono">運営メンバーを招待</p>
+        <p className="label-mono">運営メンバーを追加</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          招待メールが届き、本人がリンクからパスワードを設定します。
-          パスワードをこちらで預かることはありません。招待した人は、現在のすべてのイベントを管理できます。
+          追加するとパスワード設定用のURLが表示されます。本人に渡してください（LINEやSlackで構いません）。
+          パスワードは本人が決めるので、こちらで預かることはありません。
+          追加した人は、現在のすべてのイベントを管理できます。
         </p>
         <form onSubmit={invite} className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
           <div className="space-y-1">
@@ -125,11 +140,33 @@ export default function AdminMembersPage() {
           </div>
           <div className="flex items-end">
             <Button type="submit" disabled={busy || !email.trim()} className="w-full sm:w-auto">
-              <MailPlus className="h-4 w-4" aria-hidden />
-              招待する
+              <UserRoundPlus className="h-4 w-4" aria-hidden />
+              追加する
             </Button>
           </div>
         </form>
+
+        {issued ? (
+          <div className="mt-4 space-y-2 rounded-sm border border-intel/50 bg-intel/10 p-3">
+            <p className="text-sm text-intel">
+              {issued.email} のパスワード設定URLです。
+              <strong className="text-foreground">本人にだけ渡してください。</strong>
+              7日間で期限切れになります。
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <code className="min-w-0 flex-1 break-all rounded-sm bg-background px-2 py-1 font-mono text-xs text-foreground">
+                {issued.setupUrl}
+              </code>
+              <Button size="sm" variant="outline" onClick={() => copySetupUrl(issued.setupUrl)}>
+                <Copy className="h-3.5 w-3.5" aria-hidden />
+                {copied ? 'コピーしました' : 'コピー'}
+              </Button>
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => setIssued(null)}>
+              閉じる
+            </Button>
+          </div>
+        ) : null}
       </section>
 
       {loading && !data ? (
@@ -162,7 +199,7 @@ export default function AdminMembersPage() {
                   </TableCell>
                   <TableCell>
                     {m.pending ? (
-                      <Badge variant="outline">招待中</Badge>
+                      <Badge variant="outline">パスワード未設定</Badge>
                     ) : (
                       <Badge variant="intel">
                         <ShieldCheck className="h-3 w-3" aria-hidden />
