@@ -1,6 +1,7 @@
 import { appMode, appUrl } from '@/lib/env';
 import { getRepo } from '@/server/repo';
 import { ServiceError } from '@/server/errors';
+import { createAdminSetupToken, verifyAdminSetupToken } from '@/server/auth/session';
 import { DEMO_ADMIN_ID } from '@/server/demo/seed';
 import { requireAdmin } from './admin';
 
@@ -10,8 +11,12 @@ import { requireAdmin } from './admin';
  * ここだけは Supabase Auth を直接触る。参加者と違って運営者は
  * メールアドレスとパスワードで本人確認する必要があるため。
  *
- * パスワードはこのアプリでは一切扱わない。招待メールのリンクから
- * 本人が自分で設定する（/admin/set-password）。
+ * 追加すると、その人専用のパスワード設定URLが出る。運営がそれを本人へ渡し、
+ * 本人が自分でパスワードを決める（/admin/set-password）。
+ *
+ * メール送信に頼らないのは、Supabaseの標準メールが
+ * 「プロジェクトのメンバー以外のアドレスには送信しない」制限を持つため。
+ * 外部のスタッフを追加できないと運用にならないので、リンクを手渡す形にしている。
  */
 
 export interface AdminMember {
@@ -83,15 +88,20 @@ export async function listAdminMembers(): Promise<AdminMember[]> {
   }));
 }
 
+/** その人専用のパスワード設定URL */
+export function buildSetupUrl(userId: string): string {
+  return `${appUrl()}/admin/set-password?t=${createAdminSetupToken(userId)}`;
+}
+
 /**
- * 運営メンバーを招待する。
+ * 運営メンバーを追加する。
  *
- * 招待メールを送り、同時に管理者フラグと既存イベントの管理権限を付ける。
- * 本人がリンクからパスワードを設定した時点でログインできるようになる。
+ * アカウントを作り、管理者フラグと既存イベントの管理権限を付けたうえで、
+ * パスワード設定用のURLを返す。運営はそのURLを本人に渡す。
  */
 export async function inviteAdminMember(
   email: string,
-): Promise<{ email: string; alreadyExisted: boolean }> {
+): Promise<{ email: string; alreadyExisted: boolean; setupUrl: string }> {
   await requireAdmin();
   requireSupabaseMode();
 
@@ -99,7 +109,7 @@ export async function inviteAdminMember(
   const { supabaseAdmin } = await import('@/server/supabase/clients');
   const db = supabaseAdmin();
 
-  // 既に登録済みかどうかを先に調べる（招待の二重送信を避ける）
+  // 既に登録済みなら作り直さず、権限だけ付ける
   const { data: authList } = await db.auth.admin.listUsers({ page: 1, perPage: 200 });
   const existing = (authList?.users ?? []).find((u) => u.email?.toLowerCase() === normalized);
 
@@ -110,13 +120,15 @@ export async function inviteAdminMember(
     userId = existing.id;
     alreadyExisted = true;
   } else {
-    const { data, error } = await db.auth.admin.inviteUserByEmail(normalized, {
-      redirectTo: `${appUrl()}/admin/set-password`,
+    // メールは送らない。確認済み扱いで作り、本人はリンクからパスワードを決める
+    const { data, error } = await db.auth.admin.createUser({
+      email: normalized,
+      email_confirm: true,
     });
     if (error || !data?.user) {
       throw new ServiceError(
-        'INVITE_FAILED',
-        '招待メールを送信できませんでした。メールアドレスを確認してください。',
+        'CREATE_FAILED',
+        'アカウントを作成できませんでした。メールアドレスを確認してください。',
         502,
       );
     }
@@ -138,7 +150,43 @@ export async function inviteAdminMember(
     await repo.addEventAdmin(event.id, userId);
   }
 
-  return { email: normalized, alreadyExisted };
+  return { email: normalized, alreadyExisted, setupUrl: buildSetupUrl(userId) };
+}
+
+/**
+ * パスワード設定リンクを使って、本人がパスワードを決める。
+ *
+ * ここだけはログイン前に呼ばれるので、管理者チェックの代わりに
+ * 署名付きトークンで本人性を確認する。
+ */
+export async function completeAdminSetup(token: string, password: string): Promise<void> {
+  const payload = verifyAdminSetupToken(token);
+  if (!payload) {
+    throw new ServiceError(
+      'SETUP_LINK_INVALID',
+      'リンクが無効か、有効期限が切れています。運営者にリンクの再発行を依頼してください。',
+      401,
+    );
+  }
+  requireSupabaseMode();
+
+  const { supabaseAdmin } = await import('@/server/supabase/clients');
+  const db = supabaseAdmin();
+
+  // 運営メンバーとして登録されている人にだけ設定させる
+  const { data: profile } = await db
+    .from('users')
+    .select('id, is_admin')
+    .eq('id', payload.uid)
+    .maybeSingle();
+  if (!profile?.is_admin) {
+    throw new ServiceError('SETUP_LINK_INVALID', 'このリンクは使用できません。', 401);
+  }
+
+  const { error } = await db.auth.admin.updateUserById(payload.uid, { password });
+  if (error) {
+    throw new ServiceError('SETUP_FAILED', 'パスワードを設定できませんでした。', 502);
+  }
 }
 
 /** 自分自身の権限は外せない（全員が締め出される事故を防ぐ） */
