@@ -132,3 +132,49 @@ export function verifyJoinToken(token: string | undefined | null): JoinTokenPayl
   if (!payload.pid || !payload.eid) return null;
   return payload;
 }
+
+/* -------------------------------------------------------------------------
+ * 運営者のパスワード設定リンク
+ *
+ * 新しい運営メンバーを追加したときに配る、その人専用のURLに埋め込むトークン。
+ * リンクを開いた本人が自分でパスワードを決める。
+ *
+ * Supabaseの標準メールはプロジェクトのメンバー以外へ送信できないため、
+ * メールに頼らず「運営がリンクをコピーして本人に渡す」形にしている。
+ *
+ * 参加用リンクと違い、こちらは管理画面に入れる権限そのものなので期限を付ける。
+ * 期限切れ後は管理画面から招待し直せば新しいリンクが出る。
+ * （古いリンクは期限内なら有効なままなので、渡す相手を間違えたときは
+ *   運営メンバー画面で権限を外すこと）
+ * ---------------------------------------------------------------------- */
+
+const ADMIN_SETUP_TOKEN_TYPE = 'admin-setup';
+
+/** 7日間。当日までに渡せて、かつ放置されたリンクが残り続けない長さ */
+export const ADMIN_SETUP_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export interface AdminSetupTokenPayload {
+  typ: typeof ADMIN_SETUP_TOKEN_TYPE;
+  uid: string;
+  /** 有効期限（ミリ秒） */
+  exp: number;
+}
+
+export function createAdminSetupToken(uid: string, now = Date.now()): string {
+  return createToken({
+    typ: ADMIN_SETUP_TOKEN_TYPE,
+    uid,
+    exp: now + ADMIN_SETUP_TOKEN_MAX_AGE_MS,
+  });
+}
+
+export function verifyAdminSetupToken(
+  token: string | undefined | null,
+  now = Date.now(),
+): AdminSetupTokenPayload | null {
+  const payload = verifyToken<AdminSetupTokenPayload>(token);
+  if (!payload || payload.typ !== ADMIN_SETUP_TOKEN_TYPE) return null;
+  if (!payload.uid) return null;
+  if (typeof payload.exp !== 'number' || payload.exp < now) return null;
+  return payload;
+}
