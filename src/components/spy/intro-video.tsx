@@ -41,7 +41,13 @@ export function clearIntroSeen(): void {
   }
 }
 
-export function IntroVideo({ onClose }: { onClose: () => void }) {
+/**
+ * 閉じた理由。
+ * failed のときは「見た」ことにしない（見られなかったのに二度と出ないのは困る）。
+ */
+export type IntroCloseReason = 'ended' | 'skipped' | 'failed';
+
+export function IntroVideo({ onClose }: { onClose: (reason: IntroCloseReason) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(true);
   const [progress, setProgress] = useState(0);
@@ -61,6 +67,10 @@ export function IntroVideo({ onClose }: { onClose: () => void }) {
    * <source> を複数置いているので、最初の候補が失敗しただけで閉じてはいけない
    * （次の候補で再生できる）。すべて駄目になったときだけ閉じる。
    * それ以外の理由で始まらない場合に備えて、時間切れでも閉じる。
+   *
+   * ただしブラウザは画面が隠れている間、動画の読み込みを後回しにする。
+   * 裏に回っている時間を数えると、戻ってきた人の前で勝手に閉じてしまうので、
+   * 表示されている間だけ時間を数える。
    */
   useEffect(() => {
     const el = videoRef.current;
@@ -68,25 +78,37 @@ export function IntroVideo({ onClose }: { onClose: () => void }) {
 
     const onError = () => {
       // 候補をすべて試しても再生元が無かったときだけ諦める
-      if (el.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) onClose();
+      if (el.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) onClose('failed');
     };
     el.addEventListener('error', onError);
 
-    const timeout = window.setTimeout(() => {
+    const LIMIT_MS = 12000;
+    let waited = 0;
+    const tick = 1000;
+    const timer = window.setInterval(() => {
+      if (document.hidden) return; // 裏にいる間は数えない
       const started = el.currentTime > 0 || el.readyState >= 3;
-      if (!started) onClose();
-    }, 12000);
+      if (started) {
+        window.clearInterval(timer);
+        return;
+      }
+      waited += tick;
+      if (waited >= LIMIT_MS) {
+        window.clearInterval(timer);
+        onClose('failed');
+      }
+    }, tick);
 
     return () => {
       el.removeEventListener('error', onError);
-      window.clearTimeout(timeout);
+      window.clearInterval(timer);
     };
   }, [onClose]);
 
   // Escでも閉じられるようにする（PCで運営が確認するとき用）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onClose('skipped');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -117,7 +139,7 @@ export function IntroVideo({ onClose }: { onClose: () => void }) {
         muted
         playsInline
         preload="auto"
-        onEnded={onClose}
+        onEnded={() => onClose('ended')}
         onTimeUpdate={(e) => {
           const el = e.currentTarget;
           if (el.duration > 0) setProgress((el.currentTime / el.duration) * 100);
@@ -159,7 +181,7 @@ export function IntroVideo({ onClose }: { onClose: () => void }) {
         <Button
           size="sm"
           variant="outline"
-          onClick={onClose}
+          onClick={() => onClose('skipped')}
           className="bg-black/50 backdrop-blur"
           autoFocus
         >

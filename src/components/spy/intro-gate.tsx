@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { PlayCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { IntroVideo, hasSeenIntro, markIntroSeen } from './intro-video';
+import { IntroVideo, hasSeenIntro, markIntroSeen, type IntroCloseReason } from './intro-video';
 
 /**
  * オープニング映像の出し分け。
@@ -19,6 +19,29 @@ import { IntroVideo, hasSeenIntro, markIntroSeen } from './intro-video';
  *
  * 自動再生は画面ごとに1か所だけにすること（重ねると2つ開く）。
  */
+
+/**
+ * 再生に失敗した端末で、画面を移動するたびに再挑戦して待たされないようにする。
+ * 「見た」とは記録しないので、次にアプリを開き直せばまた試す。
+ */
+const FAILED_KEY = 'buzz-base.intro-failed';
+
+function failedThisSession(): boolean {
+  try {
+    return window.sessionStorage.getItem(FAILED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markFailedThisSession(): void {
+  try {
+    window.sessionStorage.setItem(FAILED_KEY, '1');
+  } catch {
+    // 保存できなくても動作は続けられる
+  }
+}
+
 export function IntroGate({
   autoPlay = true,
   showRewatch = true,
@@ -35,12 +58,19 @@ export function IntroGate({
   useEffect(() => {
     const already = hasSeenIntro();
     setSeen(already);
-    if (!already && autoPlay) setPlaying(true);
+    if (!already && autoPlay && !failedThisSession()) setPlaying(true);
   }, [autoPlay]);
 
-  const close = () => {
-    markIntroSeen();
-    setSeen(true);
+  const close = (reason: IntroCloseReason) => {
+    // 再生できずに閉じた場合は「見た」ことにしない。
+    // 通信が悪い・裏で開かれたなどで一度失敗しただけで、
+    // 二度とオープニングが出なくなってしまうため。
+    if (reason === 'failed') {
+      markFailedThisSession();
+    } else {
+      markIntroSeen();
+      setSeen(true);
+    }
     setPlaying(false);
   };
 
