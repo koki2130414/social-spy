@@ -19,8 +19,26 @@ import { useGame } from '@/components/spy/game-shell';
 import { useOnlineStatus } from '@/hooks/use-online-status';
 import { apiGet, apiSend, ApiError } from '@/lib/api';
 import { canVoteInPhase } from '@/lib/core/phase';
-import type { PublicParticipant } from '@/lib/types';
+import type { ParticipantGameState, PublicParticipant } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { resolveVoteFailure } from './vote-recovery';
+
+/**
+ * 投票がサーバーに残っているかを確かめる。
+ *
+ * 電波が不安定だと「送信は届いたのに返事が返らない」ことがある。
+ * 見た目の失敗だけで判断すると、実際は投票済みなのに
+ * 参加者へ失敗と伝えてしまうため、必ず本当の状態を見に行く。
+ * ここでの確認自体が失敗したときは、投票できていない扱いにする。
+ */
+async function didVoteGoThrough(): Promise<boolean> {
+  try {
+    const state = await apiGet<ParticipantGameState>('/api/participant/state');
+    return Boolean(state.vote);
+  } catch {
+    return false;
+  }
+}
 
 export default function VotePage() {
   const { state, refresh } = useGame();
@@ -109,7 +127,15 @@ export default function VotePage() {
       await refresh();
     } catch (e) {
       setConfirmOpen(false);
-      setError(e instanceof ApiError ? e.message : '投票に失敗しました。');
+
+      // 送信は届いていたのに、返事だけ電波の切れ目で失われることがある。
+      // その場合サーバーには投票が残っているので、失敗と伝えてはいけない。
+      const result = await resolveVoteFailure(e, didVoteGoThrough);
+      if (result.kind === 'recorded') {
+        await refresh();
+        return;
+      }
+      setError(result.message);
     } finally {
       setSubmitting(false);
     }
@@ -156,7 +182,9 @@ export default function VotePage() {
                   <span
                     className={cn(
                       'flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border',
-                      active ? 'border-primary text-primary' : 'border-border text-muted-foreground',
+                      active
+                        ? 'border-primary text-primary'
+                        : 'border-border text-muted-foreground',
                     )}
                   >
                     <UserRound className="h-5 w-5" aria-hidden />
