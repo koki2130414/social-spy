@@ -11,7 +11,11 @@ import type {
   SpyNotification,
   Vote,
 } from '@/lib/types';
-import { pickMissionsForParticipant, pickSpyMissions } from '@/lib/core/missions';
+import {
+  buildGeneralMissionRows,
+  pickMissionsForParticipant,
+  pickSpyMissions,
+} from '@/lib/core/missions';
 import { normalizeEventCode } from '@/lib/utils';
 import { supabaseAdmin } from '@/server/supabase/clients';
 import type { EventInput, MissionInput, MissionProgress, NotificationInput, Repo } from './types';
@@ -432,6 +436,52 @@ export class SupabaseRepo implements Repo {
       if (error) throw new Error(`assignGeneralMissions: ${error.message}`);
     }
     return this.listAssignedMissions(participantId, 'GENERAL');
+  }
+
+  /**
+   * 未配布の参加者へまとめて一般MISSIONを配る。
+   *
+   * 参加者ごとに問い合わせると 100人で 600往復になり、
+   * 1往復60msでも35秒かかって実行時間の上限を超える。
+   * ここは参加者数によらず4往復で終える。
+   */
+  async distributeGeneralMissions(eventId: string): Promise<{ assigned: number }> {
+    const participants = await this.listParticipants(eventId);
+    if (participants.length === 0) return { assigned: 0 };
+
+    // 全員分の配布済みMISSIONを1回で取る
+    const { data, error } = await this.db
+      .from('participant_missions')
+      .select('participant_id, mission_id, missions(kind)')
+      .in(
+        'participant_id',
+        participants.map((p) => p.id),
+      );
+    const assignedRows = unwrap(data, error, 'distributeGeneralMissions');
+
+    const missions = await this.listMissions(eventId);
+
+    const rows = buildGeneralMissionRows(
+      participants,
+      assignedRows.map((r: Row) => ({
+        participantId: String(r.participant_id),
+        missionId: String(r.mission_id),
+        kind: r.missions?.kind === 'SPY' ? 'SPY' : 'GENERAL',
+      })),
+      missions,
+    );
+    if (rows.length === 0) return { assigned: 0 };
+
+    const { error: insertError } = await this.db.from('participant_missions').insert(
+      rows.map((r) => ({
+        participant_id: r.participantId,
+        mission_id: r.missionId,
+        order_index: r.orderIndex,
+      })),
+    );
+    if (insertError) throw new Error(`distributeGeneralMissions: ${insertError.message}`);
+
+    return { assigned: new Set(rows.map((r) => r.participantId)).size };
   }
 
   async assignSpyMissions(participantId: string): Promise<AssignedMission[]> {

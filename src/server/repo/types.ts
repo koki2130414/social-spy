@@ -97,6 +97,14 @@ export interface Repo {
 
   listAssignedMissions(participantId: string, kind?: MissionKind): Promise<AssignedMission[]>;
   assignGeneralMissions(participantId: string): Promise<AssignedMission[]>;
+  /**
+   * 未配布の参加者へまとめて一般MISSIONを配る。
+   *
+   * 1人ずつ assignGeneralMissions を呼ぶと参加者数×往復になり、
+   * 100人規模でサーバーの実行時間上限を超える。ここは人数によらず
+   * 一定回数の問い合わせで済ませる。
+   */
+  distributeGeneralMissions(eventId: string): Promise<{ assigned: number }>;
   assignSpyMissions(participantId: string): Promise<AssignedMission[]>;
   clearSpyMissionAssignments(participantId: string): Promise<void>;
   setMissionCompleted(
