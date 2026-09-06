@@ -12,7 +12,11 @@ import type {
   SpyNotification,
   Vote,
 } from '@/lib/types';
-import { pickMissionsForParticipant, pickSpyMissions } from '@/lib/core/missions';
+import {
+  buildGeneralMissionRows,
+  pickMissionsForParticipant,
+  pickSpyMissions,
+} from '@/lib/core/missions';
 import { normalizeEventCode } from '@/lib/utils';
 import {
   buildDemoDataset,
@@ -345,6 +349,35 @@ export class DemoRepo implements Repo {
       });
     }
     return this.listAssignedMissions(participantId, 'GENERAL');
+  }
+
+  /** 本番と同じ判定・抽選を通すため、組み立ては共通の関数に任せる */
+  async distributeGeneralMissions(eventId: string): Promise<{ assigned: number }> {
+    const s = state();
+    const participants = s.participants.filter((p) => p.eventId === eventId);
+    if (participants.length === 0) return { assigned: 0 };
+
+    const ids = new Set(participants.map((p) => p.id));
+    const existing = s.participantMissions
+      .filter((pm) => ids.has(pm.participantId))
+      .map((pm) => ({
+        participantId: pm.participantId,
+        missionId: pm.missionId,
+        kind: s.missions.find((m) => m.id === pm.missionId)?.kind ?? 'GENERAL',
+      }));
+
+    const rows = buildGeneralMissionRows(participants, existing, await this.listMissions(eventId));
+    for (const r of rows) {
+      s.participantMissions.push({
+        id: nextId('pm'),
+        participantId: r.participantId,
+        missionId: r.missionId,
+        orderIndex: r.orderIndex,
+        completed: false,
+        completedAt: null,
+      });
+    }
+    return { assigned: new Set(rows.map((r) => r.participantId)).size };
   }
 
   async assignSpyMissions(participantId: string): Promise<AssignedMission[]> {
