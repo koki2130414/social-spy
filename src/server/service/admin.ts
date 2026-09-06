@@ -495,16 +495,8 @@ export async function deleteMission(eventId: string, missionId: string): Promise
 /** 未配布の参加者へ一般MISSIONを3件ずつ配布する */
 export async function distributeMissions(eventId: string): Promise<{ assigned: number }> {
   await requireEventAccess(eventId);
-  const repo = getRepo();
-  const participants = await repo.listParticipants(eventId);
-  let assigned = 0;
-  for (const p of participants) {
-    const before = await repo.listAssignedMissions(p.id, 'GENERAL');
-    if (before.length > 0) continue;
-    await repo.assignGeneralMissions(p.id);
-    assigned += 1;
-  }
-  return { assigned };
+  // 1人ずつ配ると人数分の往復になり、100人規模で実行時間の上限を超える
+  return getRepo().distributeGeneralMissions(eventId);
 }
 
 export function missionKindLabel(kind: MissionKind): string {
