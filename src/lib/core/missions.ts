@@ -1,4 +1,4 @@
-import type { Mission } from '@/lib/types';
+import type { Mission, MissionKind } from '@/lib/types';
 import { shuffle, type Rng } from './random';
 
 /** 1人あたりに配布する一般MISSIONの件数 */
@@ -44,4 +44,51 @@ export function pickSpyMissions(missions: readonly Mission[]): MissionAssignment
 
 export function countCompleted(list: readonly { completed: boolean }[]): number {
   return list.filter((m) => m.completed).length;
+}
+
+/** 一括配布のために組み立てた1行 */
+export interface GeneralMissionRow {
+  participantId: string;
+  missionId: string;
+  orderIndex: number;
+}
+
+/** 一括配布の入力。どのMISSIONが誰に配られているかだけ分かればよい */
+export interface ExistingAssignment {
+  participantId: string;
+  missionId: string;
+  kind: MissionKind;
+}
+
+/**
+ * 未配布の参加者だけを選び、挿入すべき行をまとめて組み立てる。
+ *
+ * 参加者ごとにデータベースへ問い合わせると人数分の往復になるため、
+ * 判定と抽選はすべてここ（メモリ上）で済ませる。
+ * 一般MISSIONを1件でも持っている人は配布済みとみなして飛ばす。
+ */
+export function buildGeneralMissionRows(
+  participants: readonly { id: string }[],
+  existing: readonly ExistingAssignment[],
+  missions: readonly Mission[],
+): GeneralMissionRow[] {
+  const byParticipant = new Map<string, ExistingAssignment[]>();
+  for (const a of existing) {
+    const list = byParticipant.get(a.participantId);
+    if (list) list.push(a);
+    else byParticipant.set(a.participantId, [a]);
+  }
+
+  const rows: GeneralMissionRow[] = [];
+  for (const p of participants) {
+    const mine = byParticipant.get(p.id) ?? [];
+    if (mine.some((a) => a.kind === 'GENERAL')) continue; // 配布済み
+    const picks = pickMissionsForParticipant(missions, {
+      excludeMissionIds: mine.map((a) => a.missionId),
+    });
+    for (const pick of picks) {
+      rows.push({ participantId: p.id, missionId: pick.missionId, orderIndex: pick.orderIndex });
+    }
+  }
+  return rows;
 }
