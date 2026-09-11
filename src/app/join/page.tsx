@@ -22,14 +22,16 @@ export default async function JoinPage({
         </p>
       </header>
 
-      {error === 'invalid-link' ? (
+      {error === 'invalid-link' || error === 'not-attending' ? (
         <div
           role="alert"
           className="mb-5 flex items-start gap-2 border border-primary/50 bg-primary/10 p-3 text-sm text-primary"
         >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>
-            参加用リンクが無効でした。運営から渡されたIDとパスワードでログインしてください。
+            {error === 'not-attending'
+              ? '欠席として登録されています。参加される場合は受付にお声がけください。'
+              : '参加用リンクが無効でした。運営から渡されたIDとパスワードでログインしてください。'}
           </span>
         </div>
       ) : null}
