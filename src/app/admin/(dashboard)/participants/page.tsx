@@ -533,18 +533,11 @@ export default function AdminParticipantsPage() {
                         <KeyRound className="h-3.5 w-3.5" aria-hidden />
                         PW再発行
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => setDetail(p)}>
-                        詳細
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={p.role === 'SPY' ? 'secondary' : 'danger'}
-                        disabled={busy || !p.attending}
-                        onClick={() => toggleRole(p)}
-                      >
-                        <UserRoundCog className="h-3.5 w-3.5" aria-hidden />
-                        {p.role === 'SPY' ? 'SPY解除' : 'SPYにする'}
-                      </Button>
+                      {/*
+                        受付で使う順に並べている。
+                        「欠席にする」は当日いちばん押すボタンなので、
+                        横スクロールしないと届かない位置に置かない。
+                      */}
                       {p.attending ? (
                         <Button
                           size="sm"
@@ -568,6 +561,18 @@ export default function AdminParticipantsPage() {
                           参加に戻す
                         </Button>
                       )}
+                      <Button size="sm" variant="outline" onClick={() => setDetail(p)}>
+                        詳細
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={p.role === 'SPY' ? 'secondary' : 'danger'}
+                        disabled={busy || !p.attending}
+                        onClick={() => toggleRole(p)}
+                      >
+                        <UserRoundCog className="h-3.5 w-3.5" aria-hidden />
+                        {p.role === 'SPY' ? 'SPY解除' : 'SPYにする'}
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
