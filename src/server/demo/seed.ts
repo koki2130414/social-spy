@@ -120,6 +120,7 @@ export function buildDemoDataset(): DemoDataset {
     displayName: p.name,
     affiliation: p.affiliation,
     role: p.spy ? ('SPY' as const) : ('AGENT' as const),
+    attending: true,
     loginId: null,
     joinedAt: iso(-25 + i),
     createdAt: iso(-25 + i),
