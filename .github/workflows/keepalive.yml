@@ -1,0 +1,67 @@
+# ---------------------------------------------------------------------------
+# Supabase の自動停止を防ぐ
+#
+# 無料プランのSupabaseは、一定期間アクセスが無いとプロジェクトが自動停止する。
+# 停止するとアプリ全体が落ち、管理者ログインもできなくなる（実際に一度起きた）。
+#
+# そこで1日1回 /api/health を叩き、データベースへの問い合わせを発生させる。
+# GitHubのサーバーで動くので、誰のパソコンが起動しているかに左右されない。
+#
+# 事前準備（1回だけ）:
+#   リポジトリの Settings → Secrets and variables → Actions → Variables タブ
+#   → New repository variable
+#       Name : APP_URL
+#       Value: https://＜本番のアドレス＞     ← 末尾のスラッシュは付けない
+#
+# 手動で動かしたいときは Actions タブ → keepalive → Run workflow。
+# ---------------------------------------------------------------------------
+name: keepalive
+
+on:
+  schedule:
+    # 毎日 09:00 JST（UTCでは 00:00）
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+# 何も書き換えないので、権限は最小にしておく
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: APP_URL が設定されているか確認する
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "::error::リポジトリ変数 APP_URL が未設定です。Settings → Secrets and variables → Actions → Variables で登録してください。"
+            exit 1
+          fi
+
+      - name: /api/health を叩いて Supabase を起こしておく
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          set -u
+          url="${APP_URL%/}/api/health"
+          echo "ping: $url"
+
+          # 一時的な不調で失敗扱いにしないため、間隔をあけて3回まで試す。
+          # 停止中のSupabaseは起き上がるまで数十秒かかることがある。
+          for attempt in 1 2 3; do
+            body=$(curl -sS -m 60 -w '\n%{http_code}' "$url" || true)
+            code=$(printf '%s' "$body" | tail -n1)
+            json=$(printf '%s' "$body" | sed '$d')
+            echo "attempt $attempt -> HTTP ${code:-timeout} ${json}"
+
+            if [ "$code" = "200" ]; then
+              echo "OK: データベースまで到達できました。"
+              exit 0
+            fi
+            [ "$attempt" -lt 3 ] && sleep 30
+          done
+
+          echo "::error::/api/health に到達できませんでした。アプリかSupabaseが停止している可能性があります。"
+          exit 1
