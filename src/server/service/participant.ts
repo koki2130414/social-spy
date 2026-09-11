@@ -93,6 +93,8 @@ export async function loginParticipant(
 
   const failed = () =>
     new ServiceError('INVALID_CREDENTIALS', 'IDまたはパスワードが違います。', 401);
+  const notAttending = () =>
+    new ServiceError('NOT_ATTENDING', '欠席として登録されています。受付にお声がけください。', 403);
 
   if (!event) throw failed();
 
@@ -105,6 +107,10 @@ export async function loginParticipant(
   const hash = await repo.getParticipantPasswordHash(participant.id);
   if (!hash) throw failed();
   if (!(await verifyPassword(input.password, hash))) throw failed();
+
+  // IDとパスワードが合っていても、欠席にした人は入れない。
+  // 「違います」ではなく理由を出す。受付が原因をすぐ判断できるようにするため。
+  if (!participant.attending) throw notAttending();
 
   await setParticipantSession(participant.id, event.id);
   return { eventId: event.id, participantId: participant.id };
@@ -125,6 +131,12 @@ export async function getGameState(): Promise<ParticipantGameState> {
       '参加情報が見つかりません。再度参加してください。',
       401,
     );
+  }
+  // 途中で欠席にされた場合、次の更新でゲーム画面から出す。
+  // 401 にしているのは、画面が参加登録へ戻してくれるため
+  // （そこで「欠席として登録されています」と理由が出る）。
+  if (!me.attending) {
+    throw new ServiceError('NOT_ATTENDING', '欠席として登録されています。', 401);
   }
 
   const [assigned, notifications, vote, participants] = await Promise.all([
@@ -227,7 +239,8 @@ export async function listVoteCandidates(): Promise<PublicParticipant[]> {
   const session = await requireSession();
   const repo = getRepo();
   const participants = await repo.listParticipants(session.eid);
-  return toPublicParticipants(participants.filter((p) => p.id !== session.pid));
+  // 欠席者は候補に出さない。いない人へ票が流れるのを防ぐ
+  return toPublicParticipants(participants.filter((p) => p.id !== session.pid && p.attending));
 }
 
 export async function castVote(targetId: string): Promise<{ targetDisplayName: string }> {
@@ -237,9 +250,10 @@ export async function castVote(targetId: string): Promise<{ targetDisplayName: s
   const event = await repo.getEvent(session.eid);
   if (!event) throw new ServiceError('EVENT_NOT_FOUND', 'イベントが見つかりません。', 404);
 
-  const [existingVote, target] = await Promise.all([
+  const [existingVote, target, me] = await Promise.all([
     repo.getVoteByVoter(event.id, session.pid),
     repo.getParticipant(targetId),
+    repo.getParticipant(session.pid),
   ]);
 
   const validation = validateVote({
@@ -248,7 +262,8 @@ export async function castVote(targetId: string): Promise<{ targetDisplayName: s
     targetId,
     eventId: event.id,
     existingVote,
-    target: target ? { id: target.id, eventId: target.eventId } : null,
+    target: target ? { id: target.id, eventId: target.eventId, attending: target.attending } : null,
+    voterAttending: me?.attending ?? false,
   });
   if (!validation.ok) {
     throw new ServiceError(validation.reason, VOTE_REJECTION_MESSAGE[validation.reason], 403);

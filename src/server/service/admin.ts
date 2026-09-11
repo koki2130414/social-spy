@@ -284,6 +284,8 @@ export interface AdminParticipantRow {
   hasVoted: boolean;
   votedFor: string | null;
   loginId: string | null;
+  /** 当日その人が来ているか。false は運営が欠席にした人 */
+  attending: boolean;
   joinedAt: string;
   /** この参加者専用の参加用URL。運営が本人に渡す */
   joinUrl: string;
@@ -312,6 +314,7 @@ export async function listAdminParticipants(eventId: string): Promise<AdminParti
       hasVoted: Boolean(vote),
       votedFor: vote ? (nameById.get(vote.targetParticipantId) ?? null) : null,
       loginId: p.loginId,
+      attending: p.attending,
       joinedAt: p.joinedAt,
       joinUrl: buildJoinUrl(p.id, p.eventId),
     };
@@ -433,6 +436,29 @@ export async function resetParticipantPassword(
   });
 
   return { loginId, password };
+}
+
+/**
+ * 当日の出欠を切り替える。ドタキャンした人を運営が外すための操作。
+ *
+ * 行ごと消さずに印を付けるだけにしているのは、押し間違えても戻せるようにするため。
+ * 欠席にすると、ログイン・SPY抽選・投票・集計のすべてから外れる
+ * （判定は各サービスとデータベースのトリガ側でも行う）。
+ */
+export async function setParticipantAttendance(
+  eventId: string,
+  participantId: string,
+  attending: boolean,
+): Promise<Participant> {
+  await requireEventAccess(eventId);
+  const repo = getRepo();
+  const participant = await repo.getParticipant(participantId);
+  // 別イベントの参加者IDを渡して他会場の人を欠席にできないようにする
+  if (!participant || participant.eventId !== eventId) {
+    throw new ServiceError('PARTICIPANT_NOT_FOUND', '参加者が見つかりません。', 404);
+  }
+  if (participant.attending === attending) return participant;
+  return repo.setParticipantAttendance(participantId, attending);
 }
 
 /** 参加者ごとの参加用URL（この人専用の入口） */
@@ -567,6 +593,8 @@ export async function getAdminResult(eventId: string): Promise<AdminResult> {
 export interface AdminDashboard {
   event: SpyEvent;
   participantCount: number;
+  /** 欠席にした人数（当日のドタキャン） */
+  absentCount: number;
   spyCount: number;
   completedMissions: number;
   totalMissions: number;
@@ -585,10 +613,14 @@ export async function getDashboard(eventId: string, joinUrl: string): Promise<Ad
     repo.listNotifications(eventId),
   ]);
 
+  const present = participants.filter((p) => p.attending);
+
   return {
     event,
-    participantCount: participants.length,
-    spyCount: participants.filter((p) => p.role === 'SPY').length,
+    // 人数は「当日いる人」を出す。欠席込みの数だと受付の実数と合わない
+    participantCount: present.length,
+    absentCount: participants.length - present.length,
+    spyCount: present.filter((p) => p.role === 'SPY').length,
     completedMissions: progress.reduce((sum, p) => sum + p.completed, 0),
     totalMissions: progress.reduce((sum, p) => sum + p.total, 0),
     votedCount: votes.length,
