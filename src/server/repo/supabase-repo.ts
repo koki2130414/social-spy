@@ -375,6 +375,7 @@ export class SupabaseRepo implements Repo {
         title: input.title,
         body: input.body,
         kind: input.kind,
+        difficulty: input.difficulty,
         active: input.active,
       })
       .select('*')
@@ -389,6 +390,7 @@ export class SupabaseRepo implements Repo {
     if (input.title !== undefined) patch.title = input.title;
     if (input.body !== undefined) patch.body = input.body;
     if (input.kind !== undefined) patch.kind = input.kind;
+    if (input.difficulty !== undefined) patch.difficulty = input.difficulty;
     if (input.active !== undefined) patch.active = input.active;
     const { data, error } = await this.db
       .from('missions')

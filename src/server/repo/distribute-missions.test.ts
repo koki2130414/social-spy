@@ -14,6 +14,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 /** 発行されたクエリの記録 */
 let queries: string[] = [];
 
+/** insert に渡された行。書き込み漏れを見つけるために残す */
+let inserted: unknown[] = [];
+
 /** テーブルごとに返す行 */
 let tableRows: Record<string, unknown[]> = {};
 
@@ -28,6 +31,10 @@ function makeBuilder(table: string, op: string) {
   for (const m of ['select', 'eq', 'in', 'or', 'order', 'limit', 'neq']) {
     builder[m] = () => builder;
   }
+  builder.single = () => ({
+    then: (resolve: (v: { data: unknown; error: null }) => unknown) =>
+      Promise.resolve({ data: (tableRows[table] ?? [])[0] ?? {}, error: null }).then(resolve),
+  });
   builder.then = (resolve: (v: { data: unknown; error: null }) => unknown) =>
     Promise.resolve({ data: rows, error: null }).then(resolve);
   return builder;
@@ -41,7 +48,13 @@ vi.mock('@/server/supabase/clients', () => ({
         return (b.select as (...x: unknown[]) => unknown)(...a);
       },
       insert: (...a: unknown[]) => {
+        inserted.push(...(Array.isArray(a[0]) ? a[0] : [a[0]]));
         const b = makeBuilder(table, 'insert');
+        return (b.select as (...x: unknown[]) => unknown)(...a);
+      },
+      update: (...a: unknown[]) => {
+        inserted.push(a[0]);
+        const b = makeBuilder(table, 'update');
         return (b.select as (...x: unknown[]) => unknown)(...a);
       },
     }),
@@ -84,6 +97,7 @@ function seed(participantCount: number) {
 describe('MISSION一括配布の往復回数', () => {
   beforeEach(() => {
     queries = [];
+    inserted = [];
   });
 
   it('100人でも往復回数が増えない', async () => {
@@ -115,5 +129,30 @@ describe('MISSION一括配布の往復回数', () => {
 
     expect(result.assigned).toBe(0);
     expect(queries.filter((q) => q.endsWith('.insert')).length).toBe(0);
+  });
+
+  it('MISSIONを作るとき、難易度も一緒に保存する', async () => {
+    // 読む側だけ直して書く側を忘れると、全部ノーマルとして保存されてしまう
+    seed(0);
+    await new SupabaseRepo().createMission({
+      eventId: EVENT_ID,
+      code: 'H-9',
+      title: '試験',
+      body: '本文',
+      kind: 'GENERAL',
+      difficulty: 'HARD',
+      active: true,
+    });
+
+    const row = inserted[0] as Record<string, unknown>;
+    expect(row.difficulty).toBe('HARD');
+  });
+
+  it('MISSIONの難易度を変更できる', async () => {
+    seed(0);
+    await new SupabaseRepo().updateMission('ms-1', { difficulty: 'EASY' });
+
+    const patch = inserted[0] as Record<string, unknown>;
+    expect(patch.difficulty).toBe('EASY');
   });
 });
