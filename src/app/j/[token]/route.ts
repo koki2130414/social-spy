@@ -27,6 +27,11 @@ export async function GET(_request: Request, { params }: Ctx) {
   if (!participant || participant.eventId !== payload.eid) {
     return NextResponse.redirect(`${base}/join?error=invalid-link`);
   }
+  // 欠席にした人のQR・リンクは使えなくする。
+  // 配ったカードが他人の手に渡っても、その人として入れないようにするため。
+  if (!participant.attending) {
+    return NextResponse.redirect(`${base}/join?error=not-attending`);
+  }
 
   await setParticipantSession(participant.id, participant.eventId);
   return NextResponse.redirect(`${base}/game`);
