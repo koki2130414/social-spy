@@ -31,6 +31,7 @@ function buildState(overrides: Partial<ParticipantGameState> = {}): ParticipantG
       title: `タイトル${i}`,
       body: `内容${i}`,
       kind: 'GENERAL' as const,
+      difficulty: 'NORMAL',
       completed: false,
       completedAt: null,
     })),
@@ -51,7 +52,12 @@ const gameMock = vi.hoisted(() => ({
 }));
 
 vi.mock('@/components/spy/game-shell', () => ({
-  useGame: () => ({ state: gameMock.state, loading: false, error: null, refresh: gameMock.refresh }),
+  useGame: () => ({
+    state: gameMock.state,
+    loading: false,
+    error: null,
+    refresh: gameMock.refresh,
+  }),
 }));
 
 const apiMock = vi.hoisted(() => ({
@@ -151,6 +157,7 @@ describe('MISSION画面（モバイル幅360px）', () => {
           title: '情報収集',
           body: '5人以上の参加者から情報を集めよ。',
           kind: 'SPY',
+          difficulty: 'NORMAL',
           completed: false,
           completedAt: null,
         },
