@@ -11,6 +11,7 @@ const spyMission: AssignedMission = {
   title: '情報収集',
   body: '5人以上の参加者から、現在取り組んでいる活動について情報を集めよ。',
   kind: 'SPY',
+  difficulty: 'NORMAL',
   completed: false,
   completedAt: null,
 };
