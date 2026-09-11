@@ -198,6 +198,7 @@ export class DemoRepo implements Repo {
       affiliation: input.affiliation,
       role: 'AGENT',
       loginId: input.loginId ?? null,
+      attending: true,
       joinedAt: now(),
       createdAt: now(),
       updatedAt: now(),
@@ -264,6 +265,14 @@ export class DemoRepo implements Repo {
     } else {
       await this.clearSpyMissionAssignments(participantId);
     }
+    return p;
+  }
+
+  async setParticipantAttendance(participantId: string, attending: boolean): Promise<Participant> {
+    const p = state().participants.find((x) => x.id === participantId);
+    if (!p) throw new Error('PARTICIPANT_NOT_FOUND');
+    p.attending = attending;
+    p.updatedAt = now();
     return p;
   }
 

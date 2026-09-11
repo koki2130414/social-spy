@@ -50,6 +50,8 @@ function mapParticipant(r: Row): Participant {
     affiliation: r.affiliation,
     role: r.role as ParticipantRole,
     loginId: (r.login_id as string | null) ?? null,
+    // 列がまだ無い環境でも「出席」として扱う（移行前に落ちないように）
+    attending: (r.attending as boolean | null) ?? true,
     joinedAt: r.joined_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -335,6 +337,16 @@ export class SupabaseRepo implements Repo {
     if (role === 'SPY') await this.assignSpyMissions(participantId);
     else await this.clearSpyMissionAssignments(participantId);
     return participant;
+  }
+
+  async setParticipantAttendance(participantId: string, attending: boolean): Promise<Participant> {
+    const { data, error } = await this.db
+      .from('participants')
+      .update({ attending, updated_at: new Date().toISOString() })
+      .eq('id', participantId)
+      .select('*')
+      .single();
+    return mapParticipant(unwrap(data, error, 'setParticipantAttendance'));
   }
 
   async setParticipantRoles(eventId: string, spyIds: string[]): Promise<Participant[]> {

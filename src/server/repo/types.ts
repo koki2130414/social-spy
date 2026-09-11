@@ -89,6 +89,8 @@ export interface Repo {
   ): Promise<Participant>;
   setParticipantRole(participantId: string, role: ParticipantRole): Promise<Participant>;
   setParticipantRoles(eventId: string, spyIds: string[]): Promise<Participant[]>;
+  /** 当日の欠席／出席を切り替える。運営だけが呼べること（権限確認は呼び出し側） */
+  setParticipantAttendance(participantId: string, attending: boolean): Promise<Participant>;
 
   /* --------------- missions --------------- */
   listMissions(eventId: string): Promise<Mission[]>;
