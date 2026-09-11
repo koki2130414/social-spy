@@ -11,7 +11,14 @@
 const SAFE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 const SAFE_DIGITS = '23456789';
 
-export const LOGIN_ID_MIN = 4;
+/**
+ * 1文字から許す。受付で「あなたは42番」と番号を渡し、
+ * その番号をそのままIDにして入場する運用のため。
+ *
+ * IDが短くて推測しやすくても、入場にはパスワードが要る。
+ * パスワードは英字4＋数字4で約38億通りあり、総当たりは現実的でない。
+ */
+export const LOGIN_ID_MIN = 1;
 export const LOGIN_ID_MAX = 24;
 export const PASSWORD_MIN = 6;
 export const PASSWORD_MAX = 64;

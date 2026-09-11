@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CheckCircle2, CloudUpload, Circle, Loader2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import type { MissionDifficulty } from '@/lib/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +26,13 @@ import type { AssignedMission } from '@/lib/types';
 interface DisplayMission extends AssignedMission {
   unsent: boolean;
 }
+
+/** 参加者に見せる難易度の呼び名 */
+const DIFFICULTY_LABEL: Record<MissionDifficulty, string> = {
+  EASY: 'イージー',
+  NORMAL: 'ノーマル',
+  HARD: 'ハード',
+};
 
 function MissionItem({
   mission,
@@ -64,6 +72,12 @@ function MissionItem({
               未送信
             </Badge>
           ) : null}
+          {/* 難易度は目安の表示だけ。得点にも達成判定にも使わない */}
+          {variant === 'spy' ? null : (
+            <span className="label-mono text-[10px] text-muted-foreground">
+              {DIFFICULTY_LABEL[mission.difficulty]}
+            </span>
+          )}
         </div>
 
         <h2

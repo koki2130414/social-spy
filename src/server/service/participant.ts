@@ -149,6 +149,7 @@ export async function getGameState(): Promise<ParticipantGameState> {
       title: m.title,
       body: m.body,
       kind: 'SPY' as const,
+      difficulty: m.difficulty,
       completed: false,
       completedAt: null,
     }));

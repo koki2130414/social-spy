@@ -343,7 +343,7 @@ async function resolveLoginId(eventId: string, requested?: string | null): Promi
     if (!isValidLoginId(id)) {
       throw new ServiceError(
         'INVALID_LOGIN_ID',
-        'ログインIDは4〜24文字の半角英数字（-と_も可）で入力してください。',
+        '番号またはIDは24文字以内の半角英数字（-と_も可）で入力してください。',
         400,
       );
     }

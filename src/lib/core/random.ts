@@ -3,7 +3,7 @@ export type Rng = () => number;
 
 export function createRng(seed = 1): Rng {
   let x = seed >>> 0 || 1;
-  return () => {
+  const next = () => {
     x ^= x << 13;
     x >>>= 0;
     x ^= x >> 17;
@@ -11,6 +11,11 @@ export function createRng(seed = 1): Rng {
     x >>>= 0;
     return x / 0xffffffff;
   };
+  // 小さい種だと最初の数回が極端に小さい値になり、
+  // shuffle の1回目が必ず同じ動きをしてしまう（特定の要素が先頭に来ない）。
+  // 種の影響が散るまで空回しする。
+  for (let i = 0; i < 8; i++) next();
+  return next;
 }
 
 export function shuffle<T>(items: readonly T[], rng: Rng = Math.random): T[] {

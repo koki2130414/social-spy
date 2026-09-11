@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Copy,
   KeyRound,
@@ -60,6 +60,21 @@ interface Issued {
   joinUrl: string;
 }
 
+/**
+ * 次に渡す番号を決める。
+ *
+ * 受付では番号札を順番に配るので、いま使われている最大の番号の次を出す。
+ * 番号以外のID（自動発行の agent-xxxx など）は数として扱わない。
+ */
+function nextNumber(rows: readonly { loginId: string | null }[]): string {
+  let max = 0;
+  for (const r of rows) {
+    const n = Number(r.loginId ?? '');
+    if (Number.isInteger(n) && n > max) max = n;
+  }
+  return String(max + 1);
+}
+
 export default function AdminParticipantsPage() {
   const { eventId, event } = useAdmin();
   const { data, loading, error, refresh } = useAdminResource<{ participants: Row[] }>(
@@ -79,14 +94,38 @@ export default function AdminParticipantsPage() {
   const [added, setAdded] = useState<Issued | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // 画面を開いた直後に、次に渡す番号を入れておく。
+  // 受付では番号を考える余裕がないので、そのまま追加を押せる状態にする。
+  const loaded = data?.participants;
+  useEffect(() => {
+    if (!loaded) return;
+    setNewLoginId((current) => (current === '' ? nextNumber(loaded) : current));
+  }, [loaded]);
+
   const rows = useMemo(() => {
     const list = data?.participants ?? [];
-    return list.filter((p) => {
-      if (query && !p.displayName.toLowerCase().includes(query.toLowerCase())) return false;
+    const filtered = list.filter((p) => {
+      if (query) {
+        const q = query.toLowerCase();
+        const hit =
+          p.displayName.toLowerCase().includes(q) || (p.loginId ?? '').toLowerCase().includes(q);
+        if (!hit) return false;
+      }
       if (roleFilter !== 'ALL' && p.role !== roleFilter) return false;
       if (voteFilter === 'VOTED' && !p.hasVoted) return false;
       if (voteFilter === 'NOT_VOTED' && p.hasVoted) return false;
       return true;
+    });
+    // 受付では番号で探すので番号順。番号以外のIDは後ろへ回す
+    return [...filtered].sort((a, b) => {
+      const na = Number(a.loginId ?? '');
+      const nb = Number(b.loginId ?? '');
+      const aNum = Number.isInteger(na);
+      const bNum = Number.isInteger(nb);
+      if (aNum && bNum) return na - nb;
+      if (aNum) return -1;
+      if (bNum) return 1;
+      return a.joinedAt.localeCompare(b.joinedAt);
     });
   }, [data, query, roleFilter, voteFilter]);
 
@@ -123,8 +162,9 @@ export default function AdminParticipantsPage() {
       setAdded(created);
       setNewName('');
       setNewAffiliation('');
-      setNewLoginId('');
       await refresh();
+      // 受付は番号札を順に配るので、次の番号をあらかじめ入れておく
+      setNewLoginId(nextNumber([...(data?.participants ?? []), { loginId: created.loginId }]));
     } catch (e2) {
       setActionError(e2 instanceof ApiError ? e2.message : '参加者を追加できませんでした。');
     } finally {
@@ -202,8 +242,9 @@ export default function AdminParticipantsPage() {
       <section className="rounded-sm border border-border bg-card p-5">
         <p className="label-mono">参加者を追加</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          登録するとMISSIONが3件配られ、その人専用のID・パスワードと参加用リンクが発行されます。
-          受付でIDとパスワードを渡すか、リンクをそのまま送ってください。
+          受付で番号札を渡し、その番号と名前をここで登録します。
+          登録するとMISSIONが3件配られ、番号でログインするためのパスワードが発行されます。
+          番号欄を空にすると自動でIDが作られます。
         </p>
         <form onSubmit={addParticipant} className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
           <div className="space-y-1">
@@ -227,12 +268,13 @@ export default function AdminParticipantsPage() {
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="new-login-id">ID（空欄なら自動発行）</Label>
+            <Label htmlFor="new-login-id">番号（受付で渡す番号）</Label>
             <Input
               id="new-login-id"
               value={newLoginId}
               onChange={(e) => setNewLoginId(e.target.value)}
-              placeholder="例: sato-yuma"
+              placeholder="例: 42"
+              inputMode="numeric"
               className="font-mono"
               maxLength={24}
             />
@@ -368,8 +410,8 @@ export default function AdminParticipantsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>番号</TableHead>
                 <TableHead>名前</TableHead>
-                <TableHead>ID</TableHead>
                 <TableHead>所属・肩書き</TableHead>
                 <TableHead>役割</TableHead>
                 <TableHead>MISSION</TableHead>
@@ -381,10 +423,10 @@ export default function AdminParticipantsPage() {
             <TableBody>
               {rows.map((p) => (
                 <TableRow key={p.id}>
-                  <TableCell className="font-medium text-foreground">{p.displayName}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
+                  <TableCell className="font-mono text-base font-bold tabular-nums text-foreground">
                     {p.loginId ?? '-'}
                   </TableCell>
+                  <TableCell className="font-medium text-foreground">{p.displayName}</TableCell>
                   <TableCell className="text-muted-foreground">{p.affiliation ?? '-'}</TableCell>
                   <TableCell>
                     {p.role === 'SPY' ? (

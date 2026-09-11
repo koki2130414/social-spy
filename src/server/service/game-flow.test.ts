@@ -53,6 +53,7 @@ import {
 } from './members';
 import { ServiceError } from '@/server/errors';
 import { demoAdminCredentials } from '@/lib/env';
+import { GENERAL_MISSION_PRESETS, SPY_MISSION_PRESETS } from '@/lib/core/mission-presets';
 
 const creds = demoAdminCredentials();
 
@@ -196,7 +197,7 @@ describe('SPY情報の秘匿', () => {
 
     const state = await getGameState();
     expect(state.spyMissionsPublic).toBe(true);
-    expect(state.spyMissions?.map((m) => m.code)).toContain('INFORMATION GATHERING');
+    expect(state.spyMissions?.map((m) => m.code)).toContain('S-1');
     // SPYが誰かは分からない
     expect(JSON.stringify(state.spyMissions)).not.toContain('鈴木 玲奈');
   });
@@ -275,8 +276,11 @@ describe('イベントの新規作成', () => {
     const created = await createEvent(newEvent);
 
     const missions = await getRepo().listMissions(created.id);
-    expect(missions.filter((m) => m.kind === 'GENERAL')).toHaveLength(8);
-    expect(missions.filter((m) => m.kind === 'SPY')).toHaveLength(3);
+    // 件数は直書きしない。クエストの内容を足し引きしてもここは壊れない
+    expect(missions.filter((m) => m.kind === 'GENERAL')).toHaveLength(
+      GENERAL_MISSION_PRESETS.length,
+    );
+    expect(missions.filter((m) => m.kind === 'SPY')).toHaveLength(SPY_MISSION_PRESETS.length);
 
     // 実際に参加者を登録するとMISSIONが配られる
     const { participantId } = await joinEvent({ code: 'NIGHT9', displayName: '新規参加者' });

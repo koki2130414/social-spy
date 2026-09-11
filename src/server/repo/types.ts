@@ -2,6 +2,7 @@ import type {
   AssignedMission,
   GamePhase,
   Mission,
+  MissionDifficulty,
   MissionKind,
   Participant,
   ParticipantRole,
@@ -29,6 +30,7 @@ export interface MissionInput {
   title: string;
   body: string;
   kind: MissionKind;
+  difficulty: MissionDifficulty;
   active: boolean;
 }
 
