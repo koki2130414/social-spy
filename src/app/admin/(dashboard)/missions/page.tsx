@@ -31,6 +31,7 @@ const EMPTY: MissionFormValues = {
   title: '',
   body: '',
   kind: 'GENERAL',
+  difficulty: 'NORMAL',
   active: true,
 };
 
@@ -195,10 +196,16 @@ export default function AdminMissionsPage() {
         <div className="space-y-6">
           {loading && !data ? (
             <div className="flex justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="読み込み中" />
+              <Loader2
+                className="h-6 w-6 animate-spin text-muted-foreground"
+                aria-label="読み込み中"
+              />
             </div>
           ) : error ? (
-            <p role="alert" className="border border-primary/50 bg-primary/10 p-3 text-sm text-primary">
+            <p
+              role="alert"
+              className="border border-primary/50 bg-primary/10 p-3 text-sm text-primary"
+            >
               {error}
             </p>
           ) : (
@@ -209,7 +216,10 @@ export default function AdminMissionsPage() {
           )}
         </div>
 
-        <form onSubmit={onSubmit} className="h-fit space-y-4 rounded-sm border border-border bg-card p-5">
+        <form
+          onSubmit={onSubmit}
+          className="h-fit space-y-4 rounded-sm border border-border bg-card p-5"
+        >
           <div className="flex items-center justify-between">
             <p className="label-mono">{editing ? 'EDIT MISSION' : 'NEW MISSION'}</p>
             {editing ? (
@@ -237,7 +247,11 @@ export default function AdminMissionsPage() {
 
           <div className="space-y-2">
             <Label htmlFor="m-body">内容</Label>
-            <Textarea id="m-body" placeholder="3人の参加者とSNSを交換せよ。" {...register('body')} />
+            <Textarea
+              id="m-body"
+              placeholder="3人の参加者とSNSを交換せよ。"
+              {...register('body')}
+            />
             {formState.errors.body ? (
               <p className="text-xs text-primary">{formState.errors.body.message}</p>
             ) : null}
@@ -258,11 +272,7 @@ export default function AdminMissionsPage() {
 
           <div className="flex items-center justify-between gap-3">
             <Label htmlFor="m-active">有効</Label>
-            <Switch
-              id="m-active"
-              checked={active}
-              onCheckedChange={(v) => setValue('active', v)}
-            />
+            <Switch id="m-active" checked={active} onCheckedChange={(v) => setValue('active', v)} />
           </div>
 
           <Button type="submit" size="lg" className="w-full" disabled={formState.isSubmitting}>
