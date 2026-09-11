@@ -87,6 +87,7 @@ function toAssigned(pm: ParticipantMission, mission: Mission): AssignedMission {
     title: mission.title,
     body: mission.body,
     kind: mission.kind,
+    difficulty: mission.difficulty,
     completed: pm.completed,
     completedAt: pm.completedAt,
   };

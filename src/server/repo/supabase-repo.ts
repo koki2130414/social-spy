@@ -2,6 +2,7 @@ import type {
   AssignedMission,
   GamePhase,
   Mission,
+  MissionDifficulty,
   MissionKind,
   Participant,
   ParticipantRole,
@@ -63,6 +64,7 @@ function mapMission(r: Row): Mission {
     title: r.title,
     body: r.body,
     kind: r.kind as MissionKind,
+    difficulty: (r.difficulty ?? 'NORMAL') as MissionDifficulty,
     active: r.active,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -100,6 +102,7 @@ function mapAssigned(r: Row): AssignedMission {
     title: mission?.title ?? '',
     body: mission?.body ?? '',
     kind: (mission?.kind ?? 'GENERAL') as MissionKind,
+    difficulty: (mission?.difficulty ?? 'NORMAL') as MissionDifficulty,
     completed: r.completed,
     completedAt: r.completed_at,
   };
