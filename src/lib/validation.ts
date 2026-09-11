@@ -109,6 +109,11 @@ export const phaseSchema = z.object({
   to: z.enum(GAME_PHASES),
 });
 
+/** 当日の出欠切り替え（ドタキャン対応） */
+export const participantAttendanceSchema = z.object({
+  attending: z.boolean({ required_error: '出欠を指定してください。' }),
+});
+
 /** 運営が参加者を代理登録するときの入力 */
 export const participantCreateSchema = z.object({
   displayName: z
