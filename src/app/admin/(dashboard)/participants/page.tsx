@@ -7,8 +7,10 @@ import {
   Loader2,
   Search,
   Shuffle,
+  UserRoundCheck,
   UserRoundCog,
   UserRoundPlus,
+  UserRoundX,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,6 +50,8 @@ interface Row {
   hasVoted: boolean;
   votedFor: string | null;
   loginId: string | null;
+  /** 当日その人が来ているか。false は運営が欠席にした人 */
+  attending: boolean;
   joinedAt: string;
   joinUrl: string;
 }
@@ -84,10 +88,13 @@ export default function AdminParticipantsPage() {
   const [query, setQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | ParticipantRole>('ALL');
   const [voteFilter, setVoteFilter] = useState<'ALL' | 'VOTED' | 'NOT_VOTED'>('ALL');
+  const [attendFilter, setAttendFilter] = useState<'ALL' | 'PRESENT' | 'ABSENT'>('ALL');
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmAuto, setConfirmAuto] = useState(false);
   const [detail, setDetail] = useState<Row | null>(null);
+  // 欠席にする操作は押し間違いが怖いので、名前を見せて確認してから実行する
+  const [confirmAbsent, setConfirmAbsent] = useState<Row | null>(null);
   const [newName, setNewName] = useState('');
   const [newAffiliation, setNewAffiliation] = useState('');
   const [newLoginId, setNewLoginId] = useState('');
@@ -114,6 +121,8 @@ export default function AdminParticipantsPage() {
       if (roleFilter !== 'ALL' && p.role !== roleFilter) return false;
       if (voteFilter === 'VOTED' && !p.hasVoted) return false;
       if (voteFilter === 'NOT_VOTED' && p.hasVoted) return false;
+      if (attendFilter === 'PRESENT' && !p.attending) return false;
+      if (attendFilter === 'ABSENT' && p.attending) return false;
       return true;
     });
     // 受付では番号で探すので番号順。番号以外のIDは後ろへ回す
@@ -127,7 +136,11 @@ export default function AdminParticipantsPage() {
       if (bNum) return 1;
       return a.joinedAt.localeCompare(b.joinedAt);
     });
-  }, [data, query, roleFilter, voteFilter]);
+  }, [data, query, roleFilter, voteFilter, attendFilter]);
+
+  const all = data?.participants ?? [];
+  const presentCount = all.filter((p) => p.attending).length;
+  const absentCount = all.length - presentCount;
 
   if (!eventId) {
     return <p className="text-sm text-muted-foreground">イベントを選択してください。</p>;
@@ -202,6 +215,28 @@ export default function AdminParticipantsPage() {
     }
   };
 
+  /**
+   * 当日の出欠を切り替える（ドタキャン対応）。
+   * 行を消さずに印を付けるだけなので、間違えても「参加に戻す」で元通りになる。
+   */
+  const setAttendance = async (row: Row, attending: boolean) => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      await apiSend(
+        `/api/admin/events/${eventId}/participants/${row.id}/attendance`,
+        { attending },
+        'PATCH',
+      );
+      await refresh();
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : '出欠を変更できませんでした。');
+    } finally {
+      setBusy(false);
+      setConfirmAbsent(null);
+    }
+  };
+
   const toggleRole = async (row: Row) => {
     setBusy(true);
     setActionError(null);
@@ -225,6 +260,14 @@ export default function AdminParticipantsPage() {
         <div>
           <p className="label-mono">参加者</p>
           <h1 className="headline-mono mt-1 text-xl">参加者一覧</h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            出席 <span className="font-mono text-foreground">{presentCount}</span> 名
+            {absentCount > 0 ? (
+              <>
+                {' / '}欠席 <span className="font-mono text-foreground">{absentCount}</span> 名
+              </>
+            ) : null}
+          </p>
         </div>
         <Button variant="outline" disabled={busy} onClick={() => setConfirmAuto(true)}>
           <Shuffle className="h-4 w-4" aria-hidden />
@@ -352,7 +395,7 @@ export default function AdminParticipantsPage() {
         ) : null}
       </section>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-4">
         <div className="space-y-1">
           <Label htmlFor="q">名前検索</Label>
           <div className="relative">
@@ -395,6 +438,19 @@ export default function AdminParticipantsPage() {
             <option value="NOT_VOTED">未投票</option>
           </select>
         </div>
+        <div className="space-y-1">
+          <Label htmlFor="attend">出欠フィルター</Label>
+          <select
+            id="attend"
+            value={attendFilter}
+            onChange={(e) => setAttendFilter(e.target.value as typeof attendFilter)}
+            className="min-h-[48px] w-full rounded-sm border border-input bg-background px-3 text-sm"
+          >
+            <option value="ALL">すべて</option>
+            <option value="PRESENT">出席のみ</option>
+            <option value="ABSENT">欠席のみ</option>
+          </select>
+        </div>
       </div>
 
       {loading && !data ? (
@@ -413,6 +469,7 @@ export default function AdminParticipantsPage() {
                 <TableHead>番号</TableHead>
                 <TableHead>名前</TableHead>
                 <TableHead>所属・肩書き</TableHead>
+                <TableHead>出欠</TableHead>
                 <TableHead>役割</TableHead>
                 <TableHead>MISSION</TableHead>
                 <TableHead>投票</TableHead>
@@ -422,12 +479,19 @@ export default function AdminParticipantsPage() {
             </TableHeader>
             <TableBody>
               {rows.map((p) => (
-                <TableRow key={p.id}>
+                <TableRow key={p.id} className={p.attending ? undefined : 'opacity-50'}>
                   <TableCell className="font-mono text-base font-bold tabular-nums text-foreground">
                     {p.loginId ?? '-'}
                   </TableCell>
                   <TableCell className="font-medium text-foreground">{p.displayName}</TableCell>
                   <TableCell className="text-muted-foreground">{p.affiliation ?? '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {p.attending ? (
+                      <Badge variant="outline">出席</Badge>
+                    ) : (
+                      <Badge variant="danger">欠席</Badge>
+                    )}
+                  </TableCell>
                   <TableCell>
                     {p.role === 'SPY' ? (
                       <Badge variant="danger">SPY</Badge>
@@ -475,19 +539,42 @@ export default function AdminParticipantsPage() {
                       <Button
                         size="sm"
                         variant={p.role === 'SPY' ? 'secondary' : 'danger'}
-                        disabled={busy}
+                        disabled={busy || !p.attending}
                         onClick={() => toggleRole(p)}
                       >
                         <UserRoundCog className="h-3.5 w-3.5" aria-hidden />
                         {p.role === 'SPY' ? 'SPY解除' : 'SPYにする'}
                       </Button>
+                      {p.attending ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => setConfirmAbsent(p)}
+                          title="当日来なかった人をゲームから外す"
+                        >
+                          <UserRoundX className="h-3.5 w-3.5" aria-hidden />
+                          欠席にする
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => void setAttendance(p, true)}
+                          title="やっぱり参加する人を戻す"
+                        >
+                          <UserRoundCheck className="h-3.5 w-3.5" aria-hidden />
+                          参加に戻す
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
               ))}
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                     該当する参加者がいません。
                   </TableCell>
                 </TableRow>
@@ -521,6 +608,44 @@ export default function AdminParticipantsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog
+        open={confirmAbsent !== null}
+        onOpenChange={(open) => !open && setConfirmAbsent(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmAbsent?.loginId ?? '-'}番「{confirmAbsent?.displayName}」を欠席にしますか？
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 pt-2 text-sm">
+                <p>この人はゲームから外れます。具体的には次のとおりです。</p>
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>配った番号・パスワード・QRで入れなくなります</li>
+                  <li>SPYの抽選から外れます</li>
+                  <li>投票の候補に出なくなり、結果にも出ません</li>
+                </ul>
+                <p className="text-foreground">
+                  データは消えません。あとから「参加に戻す」で元どおりにできます。
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (confirmAbsent) void setAttendance(confirmAbsent, false);
+              }}
+              disabled={busy}
+            >
+              欠席にする
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={detail !== null} onOpenChange={(open) => !open && setDetail(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -529,6 +654,7 @@ export default function AdminParticipantsPage() {
               <div className="space-y-2 pt-2 text-sm">
                 <p>ID: {detail?.loginId ?? '（未発行）'}</p>
                 <p>所属・肩書き: {detail?.affiliation ?? '-'}</p>
+                <p>出欠: {detail?.attending ? '出席' : '欠席（ゲームから外れています）'}</p>
                 <p>役割: {detail?.role === 'SPY' ? 'SPY' : 'INFORMATION AGENT'}</p>
                 <p>
                   MISSION達成: {detail?.completed} / {detail?.total}
