@@ -21,6 +21,10 @@ export type ParticipantRole = 'AGENT' | 'SPY';
 
 export type MissionKind = 'GENERAL' | 'SPY';
 
+/** MISSION の難易度。参加者には1段階ずつ配る（得点には使わない） */
+export const MISSION_DIFFICULTIES = ['EASY', 'NORMAL', 'HARD'] as const;
+export type MissionDifficulty = (typeof MISSION_DIFFICULTIES)[number];
+
 export type NotificationKind = 'INFO' | 'PHASE' | 'ALERT' | 'CLASSIFIED';
 
 export interface SpyEvent {
@@ -72,6 +76,7 @@ export interface Mission {
   title: string;
   body: string;
   kind: MissionKind;
+  difficulty: MissionDifficulty;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -95,6 +100,7 @@ export interface AssignedMission {
   title: string;
   body: string;
   kind: MissionKind;
+  difficulty: MissionDifficulty;
   completed: boolean;
   completedAt: string | null;
 }

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { GAME_PHASES } from '@/lib/types';
+import { GAME_PHASES, MISSION_DIFFICULTIES } from '@/lib/types';
 
 export const joinSchema = z.object({
   code: z
@@ -31,7 +31,8 @@ export const participantLoginSchema = z.object({
   loginId: z
     .string()
     .trim()
-    .min(4, 'IDを入力してください。')
+    // 受付で渡す番号（例: 42）をそのままIDに使うため、短くても通す
+    .min(1, 'IDまたは番号を入力してください。')
     .max(24, 'IDが長すぎます。')
     .transform((v) => v.toLowerCase()),
   password: z.string().min(6, 'パスワードを入力してください。').max(64),
@@ -75,6 +76,9 @@ export const missionSchema = z.object({
   title: z.string().trim().min(1, 'タイトルを入力してください。').max(40),
   body: z.string().trim().min(1, '内容を入力してください。').max(200),
   kind: z.enum(['GENERAL', 'SPY']),
+  // 一般MISSIONは段階ごとに1つずつ配るため、どの段階かが必要。
+  // SPY MISSIONは全部まとめて配るので実質使わないが、入力を揃えておく。
+  difficulty: z.enum(MISSION_DIFFICULTIES),
   active: z.boolean(),
 });
 export type MissionFormValues = z.infer<typeof missionSchema>;
