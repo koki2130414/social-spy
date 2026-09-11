@@ -3,7 +3,11 @@ import { computeResults, validateVote } from './vote';
 import { selectSpies } from './spy';
 import type { Participant, Vote } from '@/lib/types';
 
-function participant(id: string, role: Participant['role'] = 'AGENT'): Participant {
+function participant(
+  id: string,
+  role: Participant['role'] = 'AGENT',
+  attending = true,
+): Participant {
   return {
     id,
     eventId: 'ev1',
@@ -11,6 +15,7 @@ function participant(id: string, role: Participant['role'] = 'AGENT'): Participa
     affiliation: null,
     role,
     loginId: null,
+    attending,
     joinedAt: '2026-01-01T00:00:00.000Z',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -23,7 +28,8 @@ const base = {
   targetId: 'p2',
   eventId: 'ev1',
   existingVote: null,
-  target: { id: 'p2', eventId: 'ev1' },
+  target: { id: 'p2', eventId: 'ev1', attending: true },
+  voterAttending: true,
 };
 
 describe('投票の検証', () => {
@@ -35,7 +41,7 @@ describe('投票の検証', () => {
     const result = validateVote({
       ...base,
       targetId: 'p1',
-      target: { id: 'p1', eventId: 'ev1' },
+      target: { id: 'p1', eventId: 'ev1', attending: true },
     });
     expect(result).toEqual({ ok: false, reason: 'SELF_VOTE_FORBIDDEN' });
   });
@@ -58,7 +64,7 @@ describe('投票の検証', () => {
         ...base,
         existingVote,
         targetId: 'p4',
-        target: { id: 'p4', eventId: 'ev1' },
+        target: { id: 'p4', eventId: 'ev1', attending: true },
       }),
     ).toEqual({ ok: false, reason: 'ALREADY_VOTED' });
   });
@@ -83,7 +89,9 @@ describe('投票の検証', () => {
       ok: false,
       reason: 'TARGET_NOT_FOUND',
     });
-    expect(validateVote({ ...base, target: { id: 'p2', eventId: 'ev2' } })).toEqual({
+    expect(
+      validateVote({ ...base, target: { id: 'p2', eventId: 'ev2', attending: true } }),
+    ).toEqual({
       ok: false,
       reason: 'TARGET_OTHER_EVENT',
     });

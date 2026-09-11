@@ -65,6 +65,7 @@ describe('参加者情報の公開', () => {
       displayName: '鈴木 玲奈',
       affiliation: 'スタートアップ / 広報',
       loginId: null,
+      attending: true,
       role: 'SPY',
       joinedAt: '2026-01-01T00:00:00.000Z',
       createdAt: '2026-01-01T00:00:00.000Z',
