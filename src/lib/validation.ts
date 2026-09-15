@@ -35,7 +35,8 @@ export const participantLoginSchema = z.object({
     .min(1, 'IDまたは番号を入力してください。')
     .max(24, 'IDが長すぎます。')
     .transform((v) => v.toLowerCase()),
-  password: z.string().min(6, 'パスワードを入力してください。').max(64),
+  // 受付で渡すパスワードは数字4桁。短いぶんは試行回数の制限で守る
+  password: z.string().min(4, 'パスワードを入力してください。').max(64),
 });
 export type ParticipantLoginValues = z.infer<typeof participantLoginSchema>;
 

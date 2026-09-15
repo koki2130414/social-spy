@@ -59,6 +59,10 @@ export interface Participant {
    * false の人はログイン・SPY抽選・投票・集計のすべてから外れる。
    */
   attending: boolean;
+  /** パスワードを続けて間違えた回数。総当たりを止めるために数える */
+  failedLoginCount: number;
+  /** この時刻まではログインを受け付けない。null なら止めていない */
+  loginLockedUntil: string | null;
   joinedAt: string;
   createdAt: string;
   updatedAt: string;
