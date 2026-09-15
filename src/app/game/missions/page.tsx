@@ -20,6 +20,7 @@ import { ClassifiedPanel } from '@/components/spy/classified-panel';
 import { useGame } from '@/components/spy/game-shell';
 import { useOfflineSync } from '@/hooks/use-offline-sync';
 import { canUpdateMissionProgress } from '@/lib/core/phase';
+import { completionPercent } from '@/lib/core/score';
 import type { AssignedMission } from '@/lib/types';
 
 /** 未送信の操作を重ねた表示用のMISSION */
@@ -166,9 +167,26 @@ export default function MissionsPage() {
     <div className="space-y-5">
       <header>
         <p className="label-mono">YOUR MISSION</p>
-        <h1 className="headline-mono mt-1 text-lg">
-          達成 {completedCount} / {state.totalCount}
+        <h1 className="headline-mono mt-1 flex items-baseline gap-3 text-lg">
+          <span className="text-3xl text-intel">
+            {completionPercent(completedCount, state.totalCount)}
+            <span className="text-lg">%</span>
+          </span>
+          <span className="text-sm text-muted-foreground">
+            達成 {completedCount} / {state.totalCount}
+          </span>
         </h1>
+        {/* 未送信ぶんを含めた見た目の達成率。送信は自動で追いつく */}
+        <div
+          className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-secondary"
+          role="img"
+          aria-label={`達成率 ${completionPercent(completedCount, state.totalCount)}パーセント`}
+        >
+          <div
+            className="h-full bg-intel transition-[width] duration-500"
+            style={{ width: `${completionPercent(completedCount, state.totalCount)}%` }}
+          />
+        </div>
         <p className="mt-2 text-sm text-muted-foreground">
           達成は自己申告制です。人と話すことに集中してください。
         </p>
