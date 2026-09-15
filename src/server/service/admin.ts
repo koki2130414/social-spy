@@ -443,6 +443,13 @@ export async function resetParticipantPassword(
     passwordHash: await hashPassword(password),
   });
 
+  // 間違いが続いてログインを止められている人も、ここで解除する。
+  // 受付に来た人をその場で入れられるようにするため。
+  await repo.setParticipantLoginAttempts(participantId, {
+    failedLoginCount: 0,
+    loginLockedUntil: null,
+  });
+
   return { loginId, password };
 }
 

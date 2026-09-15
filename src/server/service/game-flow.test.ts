@@ -379,7 +379,8 @@ describe('運営が発行するIDとパスワード', () => {
     });
 
     expect(credentials.loginId).toMatch(/^[a-z0-9_-]{4,24}$/);
-    expect(credentials.password.length).toBeGreaterThanOrEqual(6);
+    // 受付で打ちやすいよう数字4桁にしている（総当たりは試行回数の制限で防ぐ）
+    expect(credentials.password).toMatch(/^[0-9]{4}$/);
 
     cookieJar.clear();
     const result = await loginParticipant({

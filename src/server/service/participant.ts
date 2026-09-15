@@ -18,6 +18,13 @@ import {
   type ParticipantSession,
 } from '@/server/auth/session';
 import { verifyPassword } from '@/server/auth/password';
+import {
+  afterFailure,
+  afterSuccess,
+  isLocked,
+  lockRemainingSeconds,
+  lockedMessage,
+} from '@/server/auth/login-throttle';
 import { normalizeLoginId } from '@/lib/core/credentials';
 import { normalizeEventCode } from '@/lib/utils';
 
@@ -106,13 +113,46 @@ export async function loginParticipant(
   );
   if (!participant) throw failed();
 
+  const attempts = {
+    failedCount: participant.failedLoginCount,
+    lockedUntil: participant.loginLockedUntil,
+  };
+
+  // 止めている間はパスワードの照合そのものを行わない。
+  // 照合は意図的に重い計算（scrypt）で1回に数秒かかるため、
+  // ここで先に返さないと、総当たりされるだけでサーバーの計算枠を使い切り、
+  // 当日アプリが止まってしまう。
+  if (isLocked(attempts)) {
+    throw new ServiceError('LOGIN_LOCKED', lockedMessage(lockRemainingSeconds(attempts)), 429);
+  }
+
   const hash = await repo.getParticipantPasswordHash(participant.id);
-  if (!hash) throw failed();
-  if (!(await verifyPassword(input.password, hash))) throw failed();
+  if (!hash || !(await verifyPassword(input.password, hash))) {
+    const next = afterFailure(attempts);
+    await repo.setParticipantLoginAttempts(participant.id, {
+      failedLoginCount: next.failedCount,
+      loginLockedUntil: next.lockedUntil,
+    });
+    // 止めたことはこの時点で伝える。何度打っても同じ文言だと
+    // 参加者が原因に気づけず、受付に来るのが遅れる。
+    if (isLocked(next)) {
+      throw new ServiceError('LOGIN_LOCKED', lockedMessage(lockRemainingSeconds(next)), 429);
+    }
+    throw failed();
+  }
 
   // IDとパスワードが合っていても、欠席にした人は入れない。
   // 「違います」ではなく理由を出す。受付が原因をすぐ判断できるようにするため。
   if (!participant.attending) throw notAttending();
+
+  // 入れたので数えていた回数を消す
+  if (attempts.failedCount !== 0 || attempts.lockedUntil !== null) {
+    const cleared = afterSuccess();
+    await repo.setParticipantLoginAttempts(participant.id, {
+      failedLoginCount: cleared.failedCount,
+      loginLockedUntil: cleared.lockedUntil,
+    });
+  }
 
   await setParticipantSession(participant.id, event.id);
   return { eventId: event.id, participantId: participant.id };
