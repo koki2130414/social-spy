@@ -55,13 +55,15 @@ export function ParticipantLoginForm({ initialCode }: { initialCode: string }) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="login-id">ID</Label>
+        <Label htmlFor="login-id">番号（受付で渡された番号）</Label>
+        {/* 受付で渡すのは番号なので、端末がテンキーを出すようにする */}
         <Input
           id="login-id"
           autoCapitalize="none"
           autoComplete="username"
-          placeholder="例: agent-7k4p"
-          className="font-mono"
+          inputMode="numeric"
+          placeholder="例: 42"
+          className="font-mono text-lg"
           aria-invalid={Boolean(errors.loginId)}
           {...register('loginId')}
         />
@@ -69,14 +71,16 @@ export function ParticipantLoginForm({ initialCode }: { initialCode: string }) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="login-password">PASSWORD / パスワード</Label>
+        <Label htmlFor="login-password">パスワード（数字4桁）</Label>
+        {/* パスワードは数字4桁。伏せ字のままテンキーを出す */}
         <Input
           id="login-password"
           type="password"
           autoCapitalize="none"
           autoComplete="current-password"
-          placeholder="受付で渡されたパスワード"
-          className="font-mono"
+          inputMode="numeric"
+          placeholder="例: 4827"
+          className="font-mono text-lg tracking-[0.3em]"
           aria-invalid={Boolean(errors.password)}
           {...register('password')}
         />
