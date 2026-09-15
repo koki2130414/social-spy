@@ -17,6 +17,7 @@ import { PhaseBadge } from '@/components/spy/phase-badge';
 import { Countdown } from '@/components/spy/countdown';
 import { useAdmin } from '@/components/spy/admin-shell';
 import { useAdminResource } from '@/hooks/use-admin-resource';
+import { completionPercent } from '@/lib/core/score';
 import { apiSend, ApiError } from '@/lib/api';
 import { isValidPhaseTransition, PHASE_META } from '@/lib/core/phase';
 import type { GamePhase, SpyEvent, SpyNotification } from '@/lib/types';
@@ -130,15 +131,11 @@ export default function AdminDashboardPage() {
         <StatTile label="参加人数" value={data.participantCount} />
         <StatTile label="SPY人数" value={data.spyCount} sub={`設定値 ${event.spyCount}`} />
         <StatTile
-          label="MISSION達成"
-          value={data.completedMissions}
-          sub={`全 ${data.totalMissions} 件中`}
+          label="クエスト達成率"
+          value={`${completionPercent(data.completedMissions, data.totalMissions)}%`}
+          sub={`${data.completedMissions} / ${data.totalMissions} 件`}
         />
-        <StatTile
-          label="投票済み"
-          value={data.votedCount}
-          sub={`${data.participantCount}名中`}
-        />
+        <StatTile label="投票済み" value={data.votedCount} sub={`${data.participantCount}名中`} />
         <StatTile
           label="残り時間"
           value={
@@ -167,7 +164,10 @@ export default function AdminDashboardPage() {
         </div>
 
         {actionError ? (
-          <p role="alert" className="mb-3 border border-primary/50 bg-primary/10 p-3 text-sm text-primary">
+          <p
+            role="alert"
+            className="mb-3 border border-primary/50 bg-primary/10 p-3 text-sm text-primary"
+          >
             {actionError}
           </p>
         ) : null}
