@@ -184,6 +184,41 @@ export interface ParticipantGameState {
   participantCount: number;
 }
 
+/** 参加者ごとのクエスト進捗。達成率の計算に使う */
+export interface MissionProgress {
+  participantId: string;
+  /** 一般クエストの達成数。SPY MISSION は含めない */
+  completed: number;
+  /** 一般クエストの配布数 */
+  total: number;
+  /** SPY MISSION の達成数。SPY以外は 0 */
+  spyCompleted: number;
+  /** SPY MISSION の配布数。SPY以外は 0 */
+  spyTotal: number;
+  /**
+   * 最後に一般クエストを達成した時刻。
+   * 達成率が同じ人の並び順（早く達成した人が上）に使う。
+   */
+  lastCompletedAt: string | null;
+  /** 最後に SPY MISSION を達成した時刻。正体公開後の並び順に使う */
+  lastSpyCompletedAt: string | null;
+}
+
+/** クエストの達成率ランキングの1行。role は決して含めない */
+export interface RankingRow {
+  /** 達成率が同じ人は同じ順位（1位が複数いてよい） */
+  rank: number;
+  participantId: string;
+  displayName: string;
+  affiliation: string | null;
+  completed: number;
+  total: number;
+  /** 0〜100 の整数 */
+  percent: number;
+  /** 最後に達成した時刻。同率のときの並び順に使う */
+  lastCompletedAt: string | null;
+}
+
 export interface VoteResultRow {
   participantId: string;
   displayName: string;
