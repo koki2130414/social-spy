@@ -199,6 +199,8 @@ export class DemoRepo implements Repo {
       role: 'AGENT',
       loginId: input.loginId ?? null,
       attending: true,
+      failedLoginCount: 0,
+      loginLockedUntil: null,
       joinedAt: now(),
       createdAt: now(),
       updatedAt: now(),
@@ -274,6 +276,16 @@ export class DemoRepo implements Repo {
     p.attending = attending;
     p.updatedAt = now();
     return p;
+  }
+
+  async setParticipantLoginAttempts(
+    participantId: string,
+    input: { failedLoginCount: number; loginLockedUntil: string | null },
+  ): Promise<void> {
+    const p = state().participants.find((x) => x.id === participantId);
+    if (!p) return;
+    p.failedLoginCount = input.failedLoginCount;
+    p.loginLockedUntil = input.loginLockedUntil;
   }
 
   async setParticipantRoles(eventId: string, spyIds: string[]): Promise<Participant[]> {

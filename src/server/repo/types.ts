@@ -88,6 +88,14 @@ export interface Repo {
   setParticipantRoles(eventId: string, spyIds: string[]): Promise<Participant[]>;
   /** 当日の欠席／出席を切り替える。運営だけが呼べること（権限確認は呼び出し側） */
   setParticipantAttendance(participantId: string, attending: boolean): Promise<Participant>;
+  /**
+   * ログインの試行回数と一時停止の記録を書き換える。
+   * パスワードの総当たりを止めるために使う。
+   */
+  setParticipantLoginAttempts(
+    participantId: string,
+    input: { failedLoginCount: number; loginLockedUntil: string | null },
+  ): Promise<void>;
 
   /* --------------- missions --------------- */
   listMissions(eventId: string): Promise<Mission[]>;

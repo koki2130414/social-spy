@@ -52,6 +52,8 @@ function mapParticipant(r: Row): Participant {
     loginId: (r.login_id as string | null) ?? null,
     // 列がまだ無い環境でも「出席」として扱う（移行前に落ちないように）
     attending: (r.attending as boolean | null) ?? true,
+    failedLoginCount: (r.failed_login_count as number | null) ?? 0,
+    loginLockedUntil: (r.login_locked_until as string | null) ?? null,
     joinedAt: r.joined_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -347,6 +349,21 @@ export class SupabaseRepo implements Repo {
       .select('*')
       .single();
     return mapParticipant(unwrap(data, error, 'setParticipantAttendance'));
+  }
+
+  async setParticipantLoginAttempts(
+    participantId: string,
+    input: { failedLoginCount: number; loginLockedUntil: string | null },
+  ): Promise<void> {
+    const { error } = await this.db
+      .from('participants')
+      .update({
+        failed_login_count: input.failedLoginCount,
+        login_locked_until: input.loginLockedUntil,
+      })
+      .eq('id', participantId);
+    // ここが失敗してもログイン自体は続行させる（数えられないだけ）
+    if (error) console.warn(`setParticipantLoginAttempts: ${error.message}`);
   }
 
   async setParticipantRoles(eventId: string, spyIds: string[]): Promise<Participant[]> {
