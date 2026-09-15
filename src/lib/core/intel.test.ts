@@ -66,6 +66,8 @@ describe('参加者情報の公開', () => {
       affiliation: 'スタートアップ / 広報',
       loginId: null,
       attending: true,
+      failedLoginCount: 0,
+      loginLockedUntil: null,
       role: 'SPY',
       joinedAt: '2026-01-01T00:00:00.000Z',
       createdAt: '2026-01-01T00:00:00.000Z',

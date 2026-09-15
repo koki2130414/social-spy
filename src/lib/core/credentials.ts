@@ -7,20 +7,35 @@
  *  - パスワードは記号を使わず、スマホで打ちやすい長さに抑える
  */
 
-/** 読み間違えにくい英数字だけを使う */
+/** 読み間違えにくい英数字だけを使う（自動発行のIDに使う） */
 const SAFE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
-const SAFE_DIGITS = '23456789';
+
+/**
+ * パスワードは数字だけにする。
+ *
+ * 受付では番号とパスワードを打ってもらうが、英字が混じると
+ * スマホでキーボードを切り替える必要があり、そこで手が止まる。
+ * 数字だけなら端末がテンキーを出すので速い。
+ *
+ * 数字だけなら 0 と O、1 と l の取り違えも起きないため、
+ * 紛らわしい文字を除く必要がなく 0〜9 をすべて使える。
+ */
+const PASSWORD_DIGITS = '0123456789';
+
+/** パスワードの桁数。短いぶんは試行回数の制限で守る（server/auth/login-throttle） */
+export const PASSWORD_LENGTH = 4;
 
 /**
  * 1文字から許す。受付で「あなたは42番」と番号を渡し、
  * その番号をそのままIDにして入場する運用のため。
  *
  * IDが短くて推測しやすくても、入場にはパスワードが要る。
- * パスワードは英字4＋数字4で約38億通りあり、総当たりは現実的でない。
+ * パスワードは数字4桁（1万通り）と短いため、総当たりを防ぐのは
+ * 桁数ではなく試行回数の制限側の役目になっている。
  */
 export const LOGIN_ID_MIN = 1;
 export const LOGIN_ID_MAX = 24;
-export const PASSWORD_MIN = 6;
+export const PASSWORD_MIN = 4;
 export const PASSWORD_MAX = 64;
 
 /**
@@ -52,17 +67,18 @@ export function generateLoginId(random: () => number = Math.random): string {
 }
 
 /**
- * ランダムなパスワードを作る（例: kmpq-4837）。
- * 口頭で伝えられる長さにしつつ、英字4 + 数字4 で総当たりに耐える程度は確保する。
+ * ランダムなパスワードを作る（例: 4827）。
+ *
+ * 数字4桁なので 0000 から 9999 の1万通り。
+ * 桁数だけでは総当たりを防げないため、間違いが続いたときに
+ * 一時的にログインを止める仕組みと必ずセットで使うこと。
+ *
+ * 先頭が 0 の場合もそのまま残す（文字列として扱う）。
  */
 export function generatePassword(random: () => number = Math.random): string {
-  let letters = '';
-  for (let i = 0; i < 4; i += 1) {
-    letters += SAFE_ALPHABET[Math.floor(random() * SAFE_ALPHABET.length)];
+  let password = '';
+  for (let i = 0; i < PASSWORD_LENGTH; i += 1) {
+    password += PASSWORD_DIGITS[Math.floor(random() * PASSWORD_DIGITS.length)];
   }
-  let digits = '';
-  for (let i = 0; i < 4; i += 1) {
-    digits += SAFE_DIGITS[Math.floor(random() * SAFE_DIGITS.length)];
-  }
-  return `${letters}-${digits}`;
+  return password;
 }
