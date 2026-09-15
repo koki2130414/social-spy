@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { ClassifiedPanel } from '@/components/spy/classified-panel';
 import { useGame } from '@/components/spy/game-shell';
 import { apiGet, ApiError } from '@/lib/api';
+import { useRanking } from '@/hooks/use-ranking';
 import { isIdentityRevealed } from '@/lib/core/phase';
 import type { GameResult } from '@/lib/types';
 
@@ -16,6 +17,8 @@ interface ParticipantResult extends GameResult {
 
 export default function ResultPage() {
   const { state } = useGame();
+  // 正体公開後なので、ここのランキングには SPY MISSION も含まれる
+  const ranking = useRanking();
   const [result, setResult] = useState<ParticipantResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const revealed = state ? isIdentityRevealed(state.event.phase) : false;
@@ -120,6 +123,52 @@ export default function ResultPage() {
             <ShieldX className="h-4 w-4" aria-hidden /> 投票していません。
           </p>
         )}
+      </section>
+
+      {/* クエストの達成率。投票とは別の表彰 */}
+      <section>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <p className="label-mono">QUEST RANKING</p>
+          {ranking.data?.me ? (
+            <Badge variant="intel">
+              あなた {ranking.data.me.percent}% ／ {ranking.data.totalParticipants}人中
+              {ranking.data.me.rank}位
+            </Badge>
+          ) : null}
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          配られたクエストのうち何％を達成したかの順位です。SPY MISSION も含みます。
+        </p>
+        <ul className="space-y-2">
+          {(ranking.data?.rows ?? []).slice(0, 10).map((row) => (
+            <li
+              key={row.participantId}
+              className={`flex items-center gap-3 rounded-sm border border-border p-3 ${
+                row.participantId === state.me.id ? 'bg-intel/10' : 'bg-card'
+              }`}
+            >
+              <span className="w-7 shrink-0 text-right font-mono text-base font-bold tabular-nums text-amber">
+                {row.rank}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                {row.displayName}
+              </span>
+              <span className="shrink-0 font-mono text-sm tabular-nums text-intel">
+                {row.percent}%
+              </span>
+            </li>
+          ))}
+          {(ranking.data?.rows ?? []).length === 0 ? (
+            <li className="rounded-sm border border-dashed border-border p-4 text-sm text-muted-foreground">
+              集計中です。
+            </li>
+          ) : null}
+        </ul>
+        {(ranking.data?.rows ?? []).length > 10 && ranking.data?.me && ranking.data.me.rank > 10 ? (
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            …あなたは {ranking.data.me.rank} 位（{ranking.data.me.percent}%）
+          </p>
+        ) : null}
       </section>
 
       {/* 全体結果 */}
