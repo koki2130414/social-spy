@@ -121,6 +121,8 @@ export function buildDemoDataset(): DemoDataset {
     affiliation: p.affiliation,
     role: p.spy ? ('SPY' as const) : ('AGENT' as const),
     attending: true,
+    failedLoginCount: 0,
+    loginLockedUntil: null,
     loginId: null,
     joinedAt: iso(-25 + i),
     createdAt: iso(-25 + i),
