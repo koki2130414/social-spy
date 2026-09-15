@@ -3,11 +3,25 @@
 import { createContext, useContext, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ClipboardList, EyeOff, Home, Loader2, Trophy, Vote, WifiOff } from 'lucide-react';
+import {
+  BarChart3,
+  ClipboardList,
+  EyeOff,
+  Home,
+  Loader2,
+  Trophy,
+  Vote,
+  WifiOff,
+} from 'lucide-react';
 import { IntroGate } from './intro-gate';
 import { useGameState, type GameStateResult } from '@/hooks/use-game-state';
 import { useOnlineStatus } from '@/hooks/use-online-status';
-import { PHASE_META, canVoteInPhase, isIdentityRevealed, isSpyMissionPublic } from '@/lib/core/phase';
+import {
+  PHASE_META,
+  canVoteInPhase,
+  isIdentityRevealed,
+  isSpyMissionPublic,
+} from '@/lib/core/phase';
 import { cn } from '@/lib/utils';
 import { SpyLogo } from './logo';
 import { PhaseBadge } from './phase-badge';
@@ -37,8 +51,7 @@ export function GameShell({ children }: { children: React.ReactNode }) {
 
   // 通信が届いていない（status 0）場合は、参加情報の問題ではないので再登録へ誘導しない
   const networkDown = !online || game.error?.status === 0;
-  const sessionInvalid =
-    !networkDown && (game.error?.status === 401 || game.error?.status === 404);
+  const sessionInvalid = !networkDown && (game.error?.status === 401 || game.error?.status === 404);
 
   useEffect(() => {
     if (sessionInvalid) router.replace('/join');
@@ -101,6 +114,12 @@ export function GameShell({ children }: { children: React.ReactNode }) {
       href: '/game/missions',
       label: 'MISSION',
       icon: ClipboardList,
+      enabled: true,
+    },
+    {
+      href: '/game/ranking',
+      label: 'RANK',
+      icon: BarChart3,
       enabled: true,
     },
     {
@@ -171,7 +190,7 @@ export function GameShell({ children }: { children: React.ReactNode }) {
 
         <nav
           aria-label="メインナビゲーション"
-          className="no-callout safe-x fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/97 backdrop-blur safe-bottom"
+          className="no-callout safe-x bg-background/97 safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-border backdrop-blur"
         >
           <ul className="mx-auto flex w-full max-w-lg">
             {nav.map((item) => {

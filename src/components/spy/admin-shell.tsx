@@ -12,6 +12,7 @@ import {
   Loader2,
   LogOut,
   ShieldCheck,
+  Trophy,
   Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,7 @@ const NAV = [
   { href: '/admin/participants', label: '参加者', icon: Users },
   { href: '/admin/missions', label: 'MISSION', icon: ClipboardList },
   { href: '/admin/notifications', label: '全体通知', icon: Bell },
+  { href: '/admin/ranking', label: '達成率', icon: Trophy },
   { href: '/admin/results', label: '投票結果', icon: BarChart3 },
   { href: '/admin/members', label: '運営メンバー', icon: ShieldCheck },
 ];
