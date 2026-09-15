@@ -3,12 +3,14 @@ import type {
   GameResult,
   ParticipantGameState,
   PublicParticipant,
+  RankingRow,
 } from '@/lib/types';
 import { canRegister, canUpdateMissionProgress, isIdentityRevealed } from '@/lib/core/phase';
 import { visibleSpyMissions } from '@/lib/core/intel';
 import { toPublicParticipant, toPublicParticipants } from '@/lib/core/spy';
 import { computeResults, validateVote, VOTE_REJECTION_MESSAGE } from '@/lib/core/vote';
 import { getRepo } from '@/server/repo';
+import { buildRanking } from '@/server/service/ranking';
 import { ServiceError } from '@/server/errors';
 import {
   getParticipantSession,
@@ -232,6 +234,40 @@ export async function setMissionCompleted(
     throw new ServiceError('MISSION_NOT_FOUND', 'MISSIONが見つかりません。', 404);
   }
   return updated;
+}
+
+export interface ParticipantRanking {
+  rows: RankingRow[];
+  /** 自分の行。欠席にされた場合など、見つからないこともある */
+  me: RankingRow | null;
+  /** 参加者に見せる母数（欠席者を除いた人数） */
+  totalParticipants: number;
+  /**
+   * SPY MISSION が達成率に入っているか。
+   * 正体公開後だけ true になる。画面の説明文の出し分けに使う。
+   */
+  includesSpyMissions: boolean;
+}
+
+/**
+ * クエストの達成率ランキング。
+ *
+ * 誰でも見られるが、返すのは表示名と達成率だけで role は含まない。
+ * SPY MISSION を含めるかはフェーズだけで決まる（buildRanking 側で判定）。
+ */
+export async function getRanking(): Promise<ParticipantRanking> {
+  const session = await requireSession();
+  const repo = getRepo();
+  const event = await repo.getEvent(session.eid);
+  if (!event) throw new ServiceError('EVENT_NOT_FOUND', 'イベントが見つかりません。', 404);
+
+  const rows = await buildRanking(event.id, event.phase);
+  return {
+    rows,
+    me: rows.find((r) => r.participantId === session.pid) ?? null,
+    totalParticipants: rows.length,
+    includesSpyMissions: isIdentityRevealed(event.phase),
+  };
 }
 
 /** 投票対象の一覧（自分以外・role を含まない） */

@@ -8,10 +8,16 @@ import type {
   Participant,
   ParticipantRole,
   PhaseHistoryEntry,
+  RankingRow,
   SpyEvent,
   SpyNotification,
 } from '@/lib/types';
-import { canRegister, isValidPhaseTransition, PHASE_META } from '@/lib/core/phase';
+import {
+  canRegister,
+  isIdentityRevealed,
+  isValidPhaseTransition,
+  PHASE_META,
+} from '@/lib/core/phase';
 import { GENERAL_MISSION_PRESETS, SPY_MISSION_PRESETS } from '@/lib/core/mission-presets';
 import {
   generateLoginId,
@@ -21,8 +27,10 @@ import {
 } from '@/lib/core/credentials';
 import { selectSpies } from '@/lib/core/spy';
 import { computeResults } from '@/lib/core/vote';
+import { overallPercent } from '@/lib/core/score';
 import { appMode, appUrl, demoAdminCredentials, supabaseConfig } from '@/lib/env';
 import { getRepo } from '@/server/repo';
+import { buildRanking } from '@/server/service/ranking';
 import { ServiceError } from '@/server/errors';
 import {
   clearAdminSession,
@@ -585,6 +593,30 @@ export async function getAdminResult(eventId: string): Promise<AdminResult> {
       target: nameById.get(v.targetParticipantId) ?? '(不明)',
       targetIsSpy: spyIds.has(v.targetParticipantId),
     })),
+  };
+}
+
+export interface AdminRanking {
+  rows: RankingRow[];
+  /** 全体の達成率（達成した件数 ÷ 配った件数） */
+  overall: number;
+  /** SPY MISSION が達成率に入っているか（正体公開後のみ true） */
+  includesSpyMissions: boolean;
+}
+
+/**
+ * 運営向けの達成率ランキング。
+ *
+ * 参加者向けと同じ計算を使う。表彰で同率を分けたいときのために
+ * 各行に最終達成時刻が入っている。
+ */
+export async function getAdminRanking(eventId: string): Promise<AdminRanking> {
+  const { event } = await requireEventAccess(eventId);
+  const rows = await buildRanking(event.id, event.phase);
+  return {
+    rows,
+    overall: overallPercent(rows),
+    includesSpyMissions: isIdentityRevealed(event.phase),
   };
 }
 
