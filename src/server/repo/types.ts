@@ -4,6 +4,7 @@ import type {
   Mission,
   MissionDifficulty,
   MissionKind,
+  MissionProgress,
   Participant,
   ParticipantRole,
   PhaseHistoryEntry,
@@ -41,11 +42,7 @@ export interface NotificationInput {
   kind: NotificationKind;
 }
 
-export interface MissionProgress {
-  participantId: string;
-  completed: number;
-  total: number;
-}
+export type { MissionProgress } from '@/lib/types';
 
 /**
  * データアクセス抽象。

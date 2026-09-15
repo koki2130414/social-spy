@@ -556,22 +556,44 @@ export class SupabaseRepo implements Repo {
   async missionProgress(eventId: string): Promise<MissionProgress[]> {
     const participants = await this.listParticipants(eventId);
     if (participants.length === 0) return [];
+    // 人数によらず1往復で済ませる。100人規模でも往復を増やさないこと
     const { data, error } = await this.db
       .from('participant_missions')
-      .select('participant_id, completed, missions(kind)')
+      .select('participant_id, completed, completed_at, missions(kind)')
       .in(
         'participant_id',
         participants.map((p) => p.id),
       );
     const rows = unwrap(data, error, 'missionProgress');
+
+    /** 参加者ごとに1回だけ走査する（人数×行数の総当たりにしない） */
+    const byParticipant = new Map<string, Row[]>();
+    for (const r of rows) {
+      const list = byParticipant.get(r.participant_id);
+      if (list) list.push(r);
+      else byParticipant.set(r.participant_id, [r]);
+    }
+
+    /** 達成済みのうち最も遅い達成時刻。達成率が同じ人の並び順に使う */
+    const lastAt = (list: Row[]): string | null =>
+      list
+        .filter((r) => r.completed && r.completed_at)
+        .map((r) => r.completed_at as string)
+        .sort()
+        .at(-1) ?? null;
+
     return participants.map((p) => {
-      const list = rows.filter(
-        (r: Row) => r.participant_id === p.id && r.missions?.kind === 'GENERAL',
-      );
+      const list = byParticipant.get(p.id) ?? [];
+      const general = list.filter((r: Row) => r.missions?.kind === 'GENERAL');
+      const spy = list.filter((r: Row) => r.missions?.kind === 'SPY');
       return {
         participantId: p.id,
-        completed: list.filter((r: Row) => r.completed).length,
-        total: list.length,
+        completed: general.filter((r: Row) => r.completed).length,
+        total: general.length,
+        spyCompleted: spy.filter((r: Row) => r.completed).length,
+        spyTotal: spy.length,
+        lastCompletedAt: lastAt(general),
+        lastSpyCompletedAt: lastAt(spy),
       };
     });
   }

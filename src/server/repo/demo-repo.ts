@@ -442,16 +442,27 @@ export class DemoRepo implements Repo {
   async missionProgress(eventId: string): Promise<MissionProgress[]> {
     const s = state();
     const participants = s.participants.filter((p) => p.eventId === eventId);
+    /** 達成済みのうち最も遅い達成時刻。達成率が同じ人の並び順に使う */
+    const lastAt = (list: { completed: boolean; completedAt: string | null }[]): string | null =>
+      list
+        .filter((pm) => pm.completed && pm.completedAt)
+        .map((pm) => pm.completedAt as string)
+        .sort()
+        .at(-1) ?? null;
+
     return participants.map((p) => {
       const list = s.participantMissions.filter((pm) => pm.participantId === p.id);
-      const general = list.filter((pm) => {
-        const m = s.missions.find((x) => x.id === pm.missionId);
-        return m?.kind === 'GENERAL';
-      });
+      const kindOf = (missionId: string) => s.missions.find((x) => x.id === missionId)?.kind;
+      const general = list.filter((pm) => kindOf(pm.missionId) === 'GENERAL');
+      const spy = list.filter((pm) => kindOf(pm.missionId) === 'SPY');
       return {
         participantId: p.id,
         completed: general.filter((pm) => pm.completed).length,
         total: general.length,
+        spyCompleted: spy.filter((pm) => pm.completed).length,
+        spyTotal: spy.length,
+        lastCompletedAt: lastAt(general),
+        lastSpyCompletedAt: lastAt(spy),
       };
     });
   }
