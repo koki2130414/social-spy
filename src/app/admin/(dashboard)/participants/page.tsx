@@ -50,13 +50,15 @@ interface Row {
   hasVoted: boolean;
   votedFor: string | null;
   loginId: string | null;
+  /** 受付で伝える数字4桁。運営画面だけに出る */
+  issuedPassword: string | null;
   /** 当日その人が来ているか。false は運営が欠席にした人 */
   attending: boolean;
   joinedAt: string;
   joinUrl: string;
 }
 
-/** 発行直後にだけ手元に出す認証情報。サーバーには平文を残さない */
+/** 発行直後に大きく表示する認証情報（本人に渡すため） */
 interface Issued {
   displayName: string;
   loginId: string;
@@ -95,6 +97,20 @@ export default function AdminParticipantsPage() {
   const [detail, setDetail] = useState<Row | null>(null);
   // 欠席にする操作は押し間違いが怖いので、名前を見せて確認してから実行する
   const [confirmAbsent, setConfirmAbsent] = useState<Row | null>(null);
+  /**
+   * パスワードは既定で伏せておく。
+   * 受付の画面はプロジェクタや後ろの人から見えることがあるため、
+   * 必要なときだけ出す。
+   */
+  const [showAllPasswords, setShowAllPasswords] = useState(false);
+  const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
+  const toggleReveal = (id: string) =>
+    setRevealedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [newName, setNewName] = useState('');
   const [newAffiliation, setNewAffiliation] = useState('');
   const [newLoginId, setNewLoginId] = useState('');
@@ -468,6 +484,18 @@ export default function AdminParticipantsPage() {
               <TableRow>
                 <TableHead>番号</TableHead>
                 <TableHead>名前</TableHead>
+                <TableHead className="whitespace-nowrap">
+                  <span className="inline-flex items-center gap-2">
+                    パスワード
+                    <button
+                      type="button"
+                      onClick={() => setShowAllPasswords((v) => !v)}
+                      className="text-[10px] font-normal text-intel underline underline-offset-2"
+                    >
+                      {showAllPasswords ? 'すべて隠す' : 'すべて表示'}
+                    </button>
+                  </span>
+                </TableHead>
                 <TableHead>所属・肩書き</TableHead>
                 <TableHead>出欠</TableHead>
                 <TableHead>役割</TableHead>
@@ -484,6 +512,29 @@ export default function AdminParticipantsPage() {
                     {p.loginId ?? '-'}
                   </TableCell>
                   <TableCell className="font-medium text-foreground">{p.displayName}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {p.issuedPassword ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleReveal(p.id)}
+                        title={
+                          showAllPasswords || revealedIds.has(p.id)
+                            ? 'クリックで隠す'
+                            : 'クリックで表示'
+                        }
+                        className="font-mono text-base tabular-nums tracking-[0.2em] text-foreground"
+                      >
+                        {showAllPasswords || revealedIds.has(p.id) ? p.issuedPassword : '••••'}
+                      </button>
+                    ) : (
+                      <span
+                        className="text-xs text-muted-foreground"
+                        title="この人のパスワードは記録が残っていません。PW再発行を押すと新しい番号が出ます。"
+                      >
+                        未記録
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{p.affiliation ?? '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">
                     {p.attending ? (
@@ -579,7 +630,7 @@ export default function AdminParticipantsPage() {
               ))}
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                     該当する参加者がいません。
                   </TableCell>
                 </TableRow>
@@ -657,7 +708,13 @@ export default function AdminParticipantsPage() {
             <AlertDialogTitle>{detail?.displayName}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 pt-2 text-sm">
-                <p>ID: {detail?.loginId ?? '（未発行）'}</p>
+                <p>番号: {detail?.loginId ?? '（未発行）'}</p>
+                <p>
+                  パスワード:{' '}
+                  <span className="font-mono tracking-[0.2em]">
+                    {detail?.issuedPassword ?? '（記録なし。PW再発行で作り直せます）'}
+                  </span>
+                </p>
                 <p>所属・肩書き: {detail?.affiliation ?? '-'}</p>
                 <p>出欠: {detail?.attending ? '出席' : '欠席（ゲームから外れています）'}</p>
                 <p>役割: {detail?.role === 'SPY' ? 'SPY' : 'INFORMATION AGENT'}</p>
