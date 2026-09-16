@@ -17,6 +17,7 @@ import {
 import { useAdmin } from '@/components/spy/admin-shell';
 import { useAdminResource } from '@/hooks/use-admin-resource';
 import { formatDateTime } from '@/lib/datetime';
+import { downloadTextFile } from '@/lib/download-csv';
 import type { RankingRow } from '@/lib/types';
 
 interface AdminRanking {
@@ -65,15 +66,8 @@ export default function AdminRankingPage() {
       ].join(','),
     );
     // Excelで文字化けしないようBOMを付ける
-    const blob = new Blob(['﻿' + [header, ...lines].join('\n')], {
-      type: 'text/csv;charset=utf-8',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'クエスト達成率.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+    // 日本語のファイル名は環境によって捨てられるので半角英数字にする
+    downloadTextFile('quest-completion.csv', '\uFEFF' + [header, ...lines].join('\r\n'));
   };
 
   if (!eventId) {
