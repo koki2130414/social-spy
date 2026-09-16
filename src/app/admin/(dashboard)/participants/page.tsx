@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Copy,
+  Download,
   KeyRound,
   Loader2,
   Search,
@@ -39,6 +40,8 @@ import { useAdminResource } from '@/hooks/use-admin-resource';
 import { apiSend, ApiError } from '@/lib/api';
 import { formatDateTime } from '@/lib/datetime';
 import type { ParticipantRole } from '@/lib/types';
+import { downloadTextFile } from '@/lib/download-csv';
+import { buildParticipantsCsv } from './participants-csv';
 
 interface Row {
   id: string;
@@ -213,6 +216,17 @@ export default function AdminParticipantsPage() {
 
   const copyJoinUrl = (row: Pick<Row, 'id' | 'joinUrl'>) => copyText(row.id, row.joinUrl);
 
+  /**
+   * 受付用の一覧をCSVで落とす。
+   *
+   * 画面に出ている並び（番号順）と絞り込みをそのまま反映する。
+   * 見たとおりのものが落ちてこないと、受付で照合するときに混乱するため。
+   */
+  // ファイル名を半角英数字にしているのは、日本語名だと環境によって
+  // 「download」という拡張子なしのファイルになってしまうため
+  const downloadCsv = () =>
+    downloadTextFile(`${event?.code ?? 'event'}_participants.csv`, buildParticipantsCsv(rows));
+
   /** 参加者がパスワードを忘れたときに、その場で作り直す */
   const resetPassword = async (row: Row) => {
     setBusy(true);
@@ -285,10 +299,21 @@ export default function AdminParticipantsPage() {
             ) : null}
           </p>
         </div>
-        <Button variant="outline" disabled={busy} onClick={() => setConfirmAuto(true)}>
-          <Shuffle className="h-4 w-4" aria-hidden />
-          SPYを自動選出（{event?.spyCount ?? 0}名）
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={downloadCsv}
+            disabled={rows.length === 0}
+            title="いま表示されている一覧をCSVで保存する"
+          >
+            <Download className="h-4 w-4" aria-hidden />
+            CSVで保存（{rows.length}名）
+          </Button>
+          <Button variant="outline" disabled={busy} onClick={() => setConfirmAuto(true)}>
+            <Shuffle className="h-4 w-4" aria-hidden />
+            SPYを自動選出（{event?.spyCount ?? 0}名）
+          </Button>
+        </div>
       </header>
 
       {actionError ? (
@@ -296,6 +321,10 @@ export default function AdminParticipantsPage() {
           {actionError}
         </p>
       ) : null}
+
+      <p className="rounded-sm border border-amber/40 bg-amber/10 p-3 text-xs text-amber">
+        CSVには全員のパスワードが入ります。受付以外へ渡さないでください。
+      </p>
 
       {/* 運営による代理登録 */}
       <section className="rounded-sm border border-border bg-card p-5">
