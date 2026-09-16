@@ -292,6 +292,11 @@ export interface AdminParticipantRow {
   hasVoted: boolean;
   votedFor: string | null;
   loginId: string | null;
+  /**
+   * 受付で伝えるための数字4桁。運営画面だけに出す。
+   * 古い参加者など、発行済みの値が残っていない場合は null。
+   */
+  issuedPassword: string | null;
   /** 当日その人が来ているか。false は運営が欠席にした人 */
   attending: boolean;
   joinedAt: string;
@@ -302,10 +307,12 @@ export interface AdminParticipantRow {
 export async function listAdminParticipants(eventId: string): Promise<AdminParticipantRow[]> {
   await requireEventAccess(eventId);
   const repo = getRepo();
-  const [participants, progress, votes] = await Promise.all([
+  const [participants, progress, votes, issuedPasswords] = await Promise.all([
     repo.listParticipants(eventId),
     repo.missionProgress(eventId),
     repo.listVotes(eventId),
+    // 運営権限は requireEventAccess で確認済み。参加者向けには決して返さない
+    repo.listIssuedPasswords(eventId),
   ]);
   const nameById = new Map(participants.map((p) => [p.id, p.displayName]));
 
@@ -322,6 +329,7 @@ export async function listAdminParticipants(eventId: string): Promise<AdminParti
       hasVoted: Boolean(vote),
       votedFor: vote ? (nameById.get(vote.targetParticipantId) ?? null) : null,
       loginId: p.loginId,
+      issuedPassword: issuedPasswords[p.id] ?? null,
       attending: p.attending,
       joinedAt: p.joinedAt,
       joinUrl: buildJoinUrl(p.id, p.eventId),
@@ -338,7 +346,7 @@ export async function listAdminParticipants(eventId: string): Promise<AdminParti
  */
 export interface IssuedCredentials {
   loginId: string;
-  /** 平文はこの瞬間だけ返す。保存されるのはハッシュのみ */
+  /** 受付で本人に伝える数字4桁 */
   password: string;
 }
 
@@ -409,6 +417,9 @@ export async function registerParticipant(
     affiliation: input.affiliation?.trim() || null,
     loginId,
     passwordHash: await hashPassword(password),
+    // 当日「パスワードを忘れた」に運営が答えられるよう、発行した数字4桁を残す。
+    // ログインの照合に使うのはあくまでハッシュのほう。
+    issuedPassword: password,
   });
   await repo.assignGeneralMissions(participant.id);
 
@@ -422,7 +433,7 @@ export async function registerParticipant(
 /**
  * パスワードを再発行する。
  * 参加者がパスワードを忘れた／紙をなくした場合に、運営がその場で作り直せるようにする。
- * 平文は返り値としてこの一度だけ返し、保存はハッシュのみ。
+ * 照合用のハッシュに加えて、運営画面に出すための数字4桁も更新する。
  */
 export async function resetParticipantPassword(
   eventId: string,
@@ -441,6 +452,7 @@ export async function resetParticipantPassword(
   await repo.setParticipantCredentials(participantId, {
     loginId,
     passwordHash: await hashPassword(password),
+    issuedPassword: password,
   });
 
   // 間違いが続いてログインを止められている人も、ここで解除する。
