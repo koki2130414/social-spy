@@ -32,7 +32,8 @@ export async function POST(request: Request, { params }: Ctx) {
         affiliation: participant.affiliation,
         joinUrl,
         loginId: credentials.loginId,
-        // 平文パスワードを返すのはこの応答だけ。保存されるのはハッシュのみ
+        // 受付でそのまま本人へ渡せるよう、発行した数字4桁を返す。
+        // 同じ値は運営の参加者一覧からもあとで確認できる（参加者向けには出さない）
         password: credentials.password,
       },
       201,
