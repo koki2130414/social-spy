@@ -69,6 +69,8 @@ export interface Repo {
     /** 運営が代理登録したときのみ設定する */
     loginId?: string | null;
     passwordHash?: string | null;
+    /** 受付で伝えるために保存する数字4桁。表示専用で照合には使わない */
+    issuedPassword?: string | null;
   }): Promise<Participant>;
   getParticipant(id: string): Promise<Participant | null>;
   /** 機密（role を含む）。管理者権限を確認した後にのみ呼ぶこと */
@@ -82,8 +84,16 @@ export interface Repo {
   getParticipantPasswordHash(participantId: string): Promise<string | null>;
   setParticipantCredentials(
     participantId: string,
-    input: { loginId?: string; passwordHash?: string },
+    input: { loginId?: string; passwordHash?: string; issuedPassword?: string },
   ): Promise<Participant>;
+  /**
+   * 運営画面に出すための、発行済みパスワード（数字4桁）の一覧。
+   *
+   * Participant 型には載せない。載せると参加者向けの応答へ紛れ込む経路が
+   * できてしまうため、運営用のこの口だけから取れるようにしている。
+   * 呼ぶ前に必ず運営権限を確認すること。
+   */
+  listIssuedPasswords(eventId: string): Promise<Record<string, string | null>>;
   setParticipantRole(participantId: string, role: ParticipantRole): Promise<Participant>;
   setParticipantRoles(eventId: string, spyIds: string[]): Promise<Participant[]>;
   /** 当日の欠席／出席を切り替える。運営だけが呼べること（権限確認は呼び出し側） */

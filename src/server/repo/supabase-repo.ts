@@ -245,6 +245,7 @@ export class SupabaseRepo implements Repo {
     affiliation: string | null;
     loginId?: string | null;
     passwordHash?: string | null;
+    issuedPassword?: string | null;
   }): Promise<Participant> {
     const { data, error } = await this.db
       .from('participants')
@@ -255,6 +256,7 @@ export class SupabaseRepo implements Repo {
         role: 'AGENT',
         login_id: input.loginId ?? null,
         password_hash: input.passwordHash ?? null,
+        issued_password: input.issuedPassword ?? null,
       })
       .select('*')
       .single();
@@ -284,11 +286,12 @@ export class SupabaseRepo implements Repo {
 
   async setParticipantCredentials(
     participantId: string,
-    input: { loginId?: string; passwordHash?: string },
+    input: { loginId?: string; passwordHash?: string; issuedPassword?: string },
   ): Promise<Participant> {
     const patch: Row = {};
     if (input.loginId !== undefined) patch.login_id = input.loginId;
     if (input.passwordHash !== undefined) patch.password_hash = input.passwordHash;
+    if (input.issuedPassword !== undefined) patch.issued_password = input.issuedPassword;
     const { data, error } = await this.db
       .from('participants')
       .update(patch)
@@ -326,6 +329,19 @@ export class SupabaseRepo implements Repo {
       .maybeSingle();
     if (error) throw new Error(`findParticipantByName: ${error.message}`);
     return data ? mapParticipant(data) : null;
+  }
+
+  async listIssuedPasswords(eventId: string): Promise<Record<string, string | null>> {
+    // 人数によらず1往復で済ませる。必要な2列だけを取る
+    const { data, error } = await this.db
+      .from('participants')
+      .select('id, issued_password')
+      .eq('event_id', eventId);
+    const out: Record<string, string | null> = {};
+    for (const r of unwrap(data, error, 'listIssuedPasswords')) {
+      out[r.id] = (r.issued_password as string | null) ?? null;
+    }
+    return out;
   }
 
   async setParticipantRole(participantId: string, role: ParticipantRole): Promise<Participant> {

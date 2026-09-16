@@ -40,6 +40,8 @@ interface DemoState extends DemoDataset {
   eventAdmins: Set<string>;
   /** 参加者パスワードのハッシュ。Participant とは別に持ち、一覧へ混入させない */
   participantPasswordHashes: Map<string, string>;
+  /** 運営画面に出すための発行済みパスワード。Participant 型には載せない */
+  participantIssuedPasswords: Map<string, string>;
   pushSubscriptions: PushSubscriptionRecord[];
   seq: number;
 }
@@ -51,6 +53,7 @@ function createState(): DemoState {
     interactiveParticipantIds: new Set([DEMO_AGENT_PARTICIPANT_ID, DEMO_SPY_PARTICIPANT_ID]),
     eventAdmins: new Set(data.events.map((e) => adminKey(e.id, DEMO_ADMIN_ID))),
     participantPasswordHashes: new Map(),
+    participantIssuedPasswords: new Map(),
     pushSubscriptions: [],
     seq: 0,
   };
@@ -190,6 +193,7 @@ export class DemoRepo implements Repo {
     affiliation: string | null;
     loginId?: string | null;
     passwordHash?: string | null;
+    issuedPassword?: string | null;
   }): Promise<Participant> {
     const p: Participant = {
       id: nextId('pt'),
@@ -210,6 +214,7 @@ export class DemoRepo implements Repo {
     s.interactiveParticipantIds.add(p.id);
     // ハッシュは Participant とは別に持ち、一覧などに紛れ込まないようにする
     if (input.passwordHash) s.participantPasswordHashes.set(p.id, input.passwordHash);
+    if (input.issuedPassword) s.participantIssuedPasswords.set(p.id, input.issuedPassword);
     return p;
   }
 
@@ -228,13 +233,15 @@ export class DemoRepo implements Repo {
 
   async setParticipantCredentials(
     participantId: string,
-    input: { loginId?: string; passwordHash?: string },
+    input: { loginId?: string; passwordHash?: string; issuedPassword?: string },
   ): Promise<Participant> {
     const s = state();
     const p = s.participants.find((x) => x.id === participantId);
     if (!p) throw new Error('setParticipantCredentials: participant not found');
     if (input.loginId !== undefined) p.loginId = input.loginId;
     if (input.passwordHash !== undefined) s.participantPasswordHashes.set(p.id, input.passwordHash);
+    if (input.issuedPassword !== undefined)
+      s.participantIssuedPasswords.set(p.id, input.issuedPassword);
     p.updatedAt = now();
     return p;
   }
@@ -255,6 +262,16 @@ export class DemoRepo implements Repo {
         (p) => p.eventId === eventId && p.displayName.trim() === displayName.trim(),
       ) ?? null
     );
+  }
+
+  async listIssuedPasswords(eventId: string): Promise<Record<string, string | null>> {
+    const s = state();
+    const out: Record<string, string | null> = {};
+    for (const p of s.participants) {
+      if (p.eventId !== eventId) continue;
+      out[p.id] = s.participantIssuedPasswords.get(p.id) ?? null;
+    }
+    return out;
   }
 
   async setParticipantRole(participantId: string, role: ParticipantRole): Promise<Participant> {
