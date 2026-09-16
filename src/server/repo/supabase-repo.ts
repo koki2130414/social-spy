@@ -337,8 +337,17 @@ export class SupabaseRepo implements Repo {
       .from('participants')
       .select('id, issued_password')
       .eq('event_id', eventId);
+
+    // 列がまだ無いデータベース（移行前）では、パスワードを「未記録」として扱う。
+    // ここで例外にすると、運営の参加者一覧そのものが開けなくなってしまう。
+    // 当日にコードだけ先に出た状態で受付が止まるのが一番まずい。
+    if (error) {
+      console.warn(`listIssuedPasswords: ${error.message}`);
+      return {};
+    }
+
     const out: Record<string, string | null> = {};
-    for (const r of unwrap(data, error, 'listIssuedPasswords')) {
+    for (const r of data ?? []) {
       out[r.id] = (r.issued_password as string | null) ?? null;
     }
     return out;
