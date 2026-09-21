@@ -10,7 +10,11 @@
  * そうなると受付でダブルクリックしてもExcelが開かず、当日に困る。
  */
 export function downloadTextFile(filename: string, text: string, mime = 'text/csv;charset=utf-8') {
-  const blob = new Blob([text], { type: mime });
+  downloadBlob(filename, new Blob([text], { type: mime }));
+}
+
+/** 画像やZIPなど、文字列でないものを保存させる。注意点は上と同じ */
+export function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
