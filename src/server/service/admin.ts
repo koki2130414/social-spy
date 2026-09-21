@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import QRCode from 'qrcode';
 import type {
   GamePhase,
   GameResult,
@@ -427,6 +428,54 @@ export async function registerParticipant(
     participant,
     joinUrl: buildJoinUrl(participant.id, eventId),
     credentials: { loginId, password },
+  };
+}
+
+export interface ParticipantQrCode {
+  participantId: string;
+  displayName: string;
+  loginId: string | null;
+  /** この人専用の入口。読み取るとその人としてログインする */
+  joinUrl: string;
+  /** QR画像（PNGのdata URL）。画面にそのまま貼れる */
+  dataUrl: string;
+}
+
+/**
+ * 参加者1人ぶんのQRコードを作る。
+ *
+ * 当日カードをなくした人に、運営の画面を見せてその場で読んでもらうため。
+ * 中身は配ったカードのQRと同じURLなので、カードが後から出てきても両方使える。
+ *
+ * このQRは読んだ人をその人としてログインさせる。
+ * 他人に見せると、その人になりすまされる。画面に出すのは本人確認のあとにすること。
+ */
+export async function getParticipantQrCode(
+  eventId: string,
+  participantId: string,
+): Promise<ParticipantQrCode> {
+  await requireEventAccess(eventId);
+  const participant = await getRepo().getParticipant(participantId);
+  // 別イベントの参加者IDを渡して他会場の人のQRを取れないようにする
+  if (!participant || participant.eventId !== eventId) {
+    throw new ServiceError('PARTICIPANT_NOT_FOUND', '参加者が見つかりません。', 404);
+  }
+
+  const joinUrl = buildJoinUrl(participant.id, participant.eventId);
+  const dataUrl = await QRCode.toDataURL(joinUrl, {
+    width: 512,
+    margin: 2,
+    // 会場の照明や画面の映り込みでも読めるよう、誤り訂正を高めにする
+    errorCorrectionLevel: 'M',
+    color: { dark: '#0a0a0a', light: '#ffffff' },
+  });
+
+  return {
+    participantId: participant.id,
+    displayName: participant.displayName,
+    loginId: participant.loginId,
+    joinUrl,
+    dataUrl,
   };
 }
 
