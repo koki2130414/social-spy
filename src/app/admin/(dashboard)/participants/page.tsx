@@ -5,6 +5,7 @@ import {
   Copy,
   Download,
   KeyRound,
+  QrCode,
   Loader2,
   Search,
   Shuffle,
@@ -37,10 +38,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useAdmin } from '@/components/spy/admin-shell';
 import { useAdminResource } from '@/hooks/use-admin-resource';
-import { apiSend, ApiError } from '@/lib/api';
+import { apiGet, apiSend, ApiError } from '@/lib/api';
 import { formatDateTime } from '@/lib/datetime';
 import type { ParticipantRole } from '@/lib/types';
-import { downloadTextFile } from '@/lib/download-csv';
+import { downloadBlob, downloadTextFile } from '@/lib/download-csv';
 import { buildParticipantsCsv } from './participants-csv';
 
 interface Row {
@@ -119,6 +120,10 @@ export default function AdminParticipantsPage() {
   const [newLoginId, setNewLoginId] = useState('');
   const [added, setAdded] = useState<Issued | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // カードをなくした人に、その場で画面を見せて読んでもらうためのQR
+  const [qr, setQr] = useState<{ row: Row; dataUrl: string } | null>(null);
+  const [qrLoadingId, setQrLoadingId] = useState<string | null>(null);
+  const [zipBusy, setZipBusy] = useState(false);
 
   // 画面を開いた直後に、次に渡す番号を入れておく。
   // 受付では番号を考える余裕がないので、そのまま追加を押せる状態にする。
@@ -227,6 +232,51 @@ export default function AdminParticipantsPage() {
   const downloadCsv = () =>
     downloadTextFile(`${event?.code ?? 'event'}_participants.csv`, buildParticipantsCsv(rows));
 
+  /**
+   * CSVと全員ぶんのQR画像をZIPでまとめて落とす。
+   *
+   * 画像はサーバーで作る。101人ぶんを端末で作らせると、
+   * 受付で使う安い端末だと固まることがあるため。
+   * 絞り込みは効かず、いつも全員ぶんが入る（配り物の作り直し用なので）。
+   */
+  const downloadZip = async () => {
+    setZipBusy(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/admin/events/${eventId}/participants/export`, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      });
+      if (!res.ok) throw new Error('failed');
+      downloadBlob(`${event?.code ?? 'event'}_participants_qr.zip`, await res.blob());
+    } catch {
+      setActionError('QR付きZIPを作れませんでした。時間をおいてもう一度お試しください。');
+    } finally {
+      setZipBusy(false);
+    }
+  };
+
+  /**
+   * その人専用のQRを画面に出す。
+   *
+   * 中身は配ったカードのQRと同じリンク。読み取るとその人としてログインする。
+   * つまり他人に見せるとなりすまされるので、本人だと確かめてから出すこと。
+   */
+  const showQr = async (row: Row) => {
+    setQrLoadingId(row.id);
+    setActionError(null);
+    try {
+      const res = await apiGet<{ dataUrl: string }>(
+        `/api/admin/events/${eventId}/participants/${row.id}/qrcode`,
+      );
+      setQr({ row, dataUrl: res.dataUrl });
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : 'QRコードを作れませんでした。');
+    } finally {
+      setQrLoadingId(null);
+    }
+  };
+
   /** 参加者がパスワードを忘れたときに、その場で作り直す */
   const resetPassword = async (row: Row) => {
     setBusy(true);
@@ -309,6 +359,19 @@ export default function AdminParticipantsPage() {
             <Download className="h-4 w-4" aria-hidden />
             CSVで保存（{rows.length}名）
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => void downloadZip()}
+            disabled={zipBusy}
+            title="CSVと全員ぶんのQR画像をZIPでまとめて保存する（絞り込みに関わらず全員）"
+          >
+            {zipBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <QrCode className="h-4 w-4" aria-hidden />
+            )}
+            {zipBusy ? '作成中…' : 'CSV＋QRをZIPで保存'}
+          </Button>
           <Button variant="outline" disabled={busy} onClick={() => setConfirmAuto(true)}>
             <Shuffle className="h-4 w-4" aria-hidden />
             SPYを自動選出（{event?.spyCount ?? 0}名）
@@ -323,7 +386,7 @@ export default function AdminParticipantsPage() {
       ) : null}
 
       <p className="rounded-sm border border-amber/40 bg-amber/10 p-3 text-xs text-amber">
-        CSVには全員のパスワードが入ります。受付以外へ渡さないでください。
+        CSVとZIPには全員のパスワードとQR（読むとその人になれるリンク）が入ります。受付以外へ渡さないでください。
       </p>
 
       {/* 運営による代理登録 */}
@@ -606,6 +669,20 @@ export default function AdminParticipantsPage() {
                       <Button
                         size="sm"
                         variant="outline"
+                        disabled={qrLoadingId === p.id}
+                        onClick={() => void showQr(p)}
+                        title="カードをなくした人に見せるQR。読むとこの人としてログインします"
+                      >
+                        {qrLoadingId === p.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                        ) : (
+                          <QrCode className="h-3.5 w-3.5" aria-hidden />
+                        )}
+                        QR
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         disabled={busy}
                         onClick={() => resetPassword(p)}
                         title="パスワードを作り直して表示する"
@@ -726,6 +803,54 @@ export default function AdminParticipantsPage() {
               disabled={busy}
             >
               欠席にする
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/*
+        QR表示。スマホのカメラを向けてもらうので、画面の大半をQRにする。
+        あとから紙のカードが出てきても、同じリンクなのでどちらも使える。
+      */}
+      <AlertDialog open={qr !== null} onOpenChange={(open) => !open && setQr(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {qr?.row.loginId ?? '-'}番 {qr?.row.displayName}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 pt-2 text-sm">
+                <p>本人にこのQRを読んでもらうと、そのままログインします。</p>
+                {qr ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={qr.dataUrl}
+                    alt={`${qr.row.displayName}さんの参加用QRコード`}
+                    className="mx-auto block h-auto w-full max-w-[280px] rounded-sm border border-border bg-white p-2"
+                  />
+                ) : null}
+                <p className="text-center">
+                  パスワード:{' '}
+                  <span className="font-mono text-base tracking-[0.2em] text-foreground">
+                    {qr?.row.issuedPassword ?? '（記録なし）'}
+                  </span>
+                </p>
+                <p className="text-xs text-primary">
+                  このQRは読んだ人をこの人としてログインさせます。
+                  本人だと確かめてから画面を見せてください。
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>閉じる</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (qr) void copyText(`qr-${qr.row.id}`, qr.row.joinUrl);
+              }}
+            >
+              {qr && copiedId === `qr-${qr.row.id}` ? 'コピーしました' : 'リンクをコピー'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
