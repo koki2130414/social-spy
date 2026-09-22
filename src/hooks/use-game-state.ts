@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet, ApiError } from '@/lib/api';
+import { nextPollDelay } from '@/lib/polling';
 import type { ParticipantGameState } from '@/lib/types';
 import { useRealtimeEvent } from './use-realtime';
 
@@ -53,12 +54,18 @@ export function useGameState(): GameStateResult {
     mounted.current = true;
     void refresh();
 
-    // 画面が消えている間は問い合わせない。
-    // 交流会では大半の人が端末をしまっているので、ここが一番効く。
-    const id = setInterval(() => {
-      if (document.hidden) return;
-      void refresh();
-    }, POLL_INTERVAL_MS);
+    // 間隔を端末ごとに少しずらす。全員が同じ瞬間に叩くのを避けるため、
+    // 一定間隔ではなく、毎回ずらした時間で次を予約する
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      timer = setTimeout(() => {
+        // 画面が消えている間は問い合わせない。
+        // 交流会では大半の人が端末をしまっているので、ここが一番効く。
+        if (!document.hidden) void refresh();
+        tick();
+      }, nextPollDelay(POLL_INTERVAL_MS));
+    };
+    tick();
 
     // 戻ってきた瞬間は待たせずに最新へ追いつく
     const onVisible = () => {
@@ -68,7 +75,7 @@ export function useGameState(): GameStateResult {
 
     return () => {
       mounted.current = false;
-      clearInterval(id);
+      clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [refresh]);

@@ -2,6 +2,16 @@
 
 import { useEffect, useRef } from 'react';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { realtimeJitter } from '@/lib/polling';
+
+/**
+ * 合図が届いてから問い合わせるまでに散らす幅。
+ *
+ * フェーズ変更は101台に同時に届く。そのまま全員が問い合わせると
+ * その一瞬だけ詰まるので、1.5秒の幅に散らして山を平らにする。
+ * 人が「反応が遅い」と感じる長さではない。
+ */
+const JITTER_MS = 1500;
 
 let browserClient: SupabaseClient | null | undefined;
 
@@ -28,21 +38,33 @@ export function useRealtimeEvent(eventId: string | null, onChange: () => void) {
     const client = getBrowserClient();
     if (!client) return;
 
+    // フェーズ変更では events と notifications の両方が動くことがある。
+    // 予約済みのときは重ねず、1回にまとめる
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const schedule = () => {
+      if (timer !== null) return;
+      timer = setTimeout(() => {
+        timer = null;
+        handler.current();
+      }, realtimeJitter(JITTER_MS));
+    };
+
     const channel = client
       .channel(`event-${eventId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'events', filter: `id=eq.${eventId}` },
-        () => handler.current(),
+        () => schedule(),
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'notifications', filter: `event_id=eq.${eventId}` },
-        () => handler.current(),
+        () => schedule(),
       )
       .subscribe();
 
     return () => {
+      if (timer !== null) clearTimeout(timer);
       void client.removeChannel(channel);
     };
   }, [eventId]);
