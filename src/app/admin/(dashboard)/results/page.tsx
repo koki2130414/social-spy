@@ -13,12 +13,18 @@ import {
 import { useAdmin } from '@/components/spy/admin-shell';
 import { useAdminResource } from '@/hooks/use-admin-resource';
 import type { GameResult } from '@/lib/types';
+import type { FinalRankingRow } from '@/lib/core/final-score';
+import { Button } from '@/components/ui/button';
+import { Download } from 'lucide-react';
+import { downloadTextFile } from '@/lib/download-csv';
 
 interface AdminResult extends GameResult {
   notVoted: { id: string; displayName: string }[];
   votedCount: number;
+  ballotCount: number;
   identityRevealed: boolean;
   ballots: { voter: string; target: string; targetIsSpy: boolean }[];
+  finalRanking: FinalRankingRow[];
 }
 
 function Tile({ label, value }: { label: string; value: React.ReactNode }) {
@@ -36,6 +42,23 @@ export default function AdminResultsPage() {
     eventId ? `/api/admin/events/${eventId}/results` : null,
     6000,
   );
+
+  /** 表彰の読み上げ用に手元へ落とす。ファイル名は半角英数字にする */
+  const downloadFinalCsv = () => {
+    const header = '順位,名前,所属・肩書き,達成率,SPY的中,選んだ人数,ポイント';
+    const lines = (data?.finalRanking ?? []).map((r) =>
+      [
+        r.rank,
+        `"${r.displayName.replace(/"/g, '""')}"`,
+        `"${(r.affiliation ?? '').replace(/"/g, '""')}"`,
+        `${r.percent}%`,
+        r.correctSpies,
+        r.picked,
+        r.points.toFixed(2),
+      ].join(','),
+    );
+    downloadTextFile('final-ranking.csv', '\uFEFF' + [header, ...lines].join('\r\n'));
+  };
 
   if (!eventId) {
     return <p className="text-sm text-muted-foreground">イベントを選択してください。</p>;
@@ -71,10 +94,74 @@ export default function AdminResultsPage() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile label="投票済み" value={`${data.votedCount} / ${data.totalParticipants}`} />
-        <Tile label="未投票" value={data.notVoted.length} />
-        <Tile label="SPYへ投票できた人数" value={data.correctVoters} />
+        <Tile label="投じられた票" value={data.ballotCount} />
+        <Tile
+          label="SPYを当てた人"
+          value={data.finalRanking.filter((r) => r.correctSpies > 0).length}
+        />
         <Tile label="SPY人数" value={data.spies.length} />
       </div>
+
+      {/* 表彰用。達成率とSPY正解を合わせた総合順位 */}
+      <section>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="label-mono">総合順位（表彰用）</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              クエスト達成率100%で1.00pt、SPYを1人当てるごとに1.00pt。
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={downloadFinalCsv}>
+            <Download className="h-3.5 w-3.5" aria-hidden />
+            CSV
+          </Button>
+        </div>
+        <div className="rounded-sm border border-border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>順位</TableHead>
+                <TableHead>名前</TableHead>
+                <TableHead>所属・肩書き</TableHead>
+                <TableHead>達成率</TableHead>
+                <TableHead>SPY的中</TableHead>
+                <TableHead>選んだ人数</TableHead>
+                <TableHead>ポイント</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.finalRanking.map((r) => (
+                <TableRow key={r.participantId}>
+                  <TableCell className="font-mono text-base font-bold tabular-nums text-foreground">
+                    {r.rank}
+                  </TableCell>
+                  <TableCell className="text-foreground">{r.displayName}</TableCell>
+                  <TableCell className="text-muted-foreground">{r.affiliation ?? '-'}</TableCell>
+                  <TableCell className="font-mono tabular-nums text-muted-foreground">
+                    {r.percent}%
+                  </TableCell>
+                  <TableCell className="font-mono tabular-nums text-amber">
+                    {r.correctSpies}
+                  </TableCell>
+                  <TableCell className="font-mono tabular-nums text-muted-foreground">
+                    {r.picked}
+                  </TableCell>
+                  <TableCell className="font-mono text-base tabular-nums text-intel">
+                    {r.points.toFixed(2)}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {data.finalRanking.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                    集計対象がいません。
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </div>
+      </section>
 
       <section>
         <p className="label-mono mb-3">得票数</p>
