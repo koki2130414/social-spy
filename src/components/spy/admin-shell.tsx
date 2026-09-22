@@ -68,13 +68,17 @@ export function AdminShell({
   const reloadEvents = useCallback(async () => {
     try {
       const res = await apiGet<{ events: SpyEvent[] }>('/api/admin/events');
-      setEvents(res.events);
+      // しまってあるイベントは選択欄に出さない。
+      // 当日この欄で選び間違えると、別のイベントを操作してしまうため。
+      // 選択中のものがしまわれた場合は、そのまま選べるように残す。
+      const selectable = res.events.filter((e) => e.archivedAt === null);
+      setEvents(selectable);
       setEventIdState((current) => {
-        if (current && res.events.some((e) => e.id === current)) return current;
+        if (current && selectable.some((e) => e.id === current)) return current;
         const stored =
           typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null;
-        if (stored && res.events.some((e) => e.id === stored)) return stored;
-        return res.events[0]?.id ?? null;
+        if (stored && selectable.some((e) => e.id === stored)) return stored;
+        return selectable[0]?.id ?? null;
       });
       setError(null);
     } catch (e) {
