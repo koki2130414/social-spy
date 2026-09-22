@@ -104,6 +104,28 @@ async function countTrips(run: () => Promise<unknown>) {
   return queries.length;
 }
 
+describe('SPY MISSIONの配り直し', () => {
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon-key');
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'service-key');
+  });
+
+  it('すでにSPY MISSIONを持っている人には足さない', async () => {
+    // SPY MISSIONは毎回くじ引き。選び直すたびに足すと、
+    // 同じ人が3件→6件と増えて、その人の達成率だけ下がる＝正体がばれる
+    seed(10);
+    tableRows.participant_missions = [
+      { id: 'pm1', participant_id: 'p0', mission_id: 'sm1', order_index: 1, completed: false },
+    ];
+    const repo = new SupabaseRepo();
+    queries = [];
+    await repo.setParticipantRoles(EVENT_ID, ['p0']);
+
+    expect(queries.filter((q) => q === 'participant_missions.insert')).toHaveLength(0);
+  });
+});
+
 describe('SPYを決めるときの往復回数', () => {
   beforeEach(() => {
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co');
