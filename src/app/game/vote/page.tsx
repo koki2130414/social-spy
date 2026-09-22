@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Loader2, Lock, UserRound, WifiOff } from 'lucide-react';
+import { Check, CheckCircle2, Loader2, Lock, UserRound, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -19,6 +19,7 @@ import { useGame } from '@/components/spy/game-shell';
 import { useOnlineStatus } from '@/hooks/use-online-status';
 import { apiGet, apiSend, ApiError } from '@/lib/api';
 import { canVoteInPhase } from '@/lib/core/phase';
+import { MAX_VOTE_TARGETS } from '@/lib/core/vote';
 import type { ParticipantGameState, PublicParticipant } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { resolveVoteFailure } from './vote-recovery';
@@ -34,7 +35,7 @@ import { resolveVoteFailure } from './vote-recovery';
 async function didVoteGoThrough(): Promise<boolean> {
   try {
     const state = await apiGet<ParticipantGameState>('/api/participant/state');
-    return Boolean(state.vote);
+    return state.votedTargetIds.length > 0;
   } catch {
     return false;
   }
@@ -44,17 +45,18 @@ export default function VotePage() {
   const { state, refresh } = useGame();
   const online = useOnlineStatus();
   const [candidates, setCandidates] = useState<PublicParticipant[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
+  // SPYだと思う人を複数選べる（上限は MAX_VOTE_TARGETS）
+  const [selected, setSelected] = useState<string[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const votable = state ? canVoteInPhase(state.event.phase) : false;
-  const alreadyVoted = Boolean(state?.vote);
+  const alreadyVoted = (state?.votedTargetIds.length ?? 0) > 0;
 
   useEffect(() => {
-    if (!votable || alreadyVoted) {
+    if (!votable) {
       setLoading(false);
       return;
     }
@@ -72,7 +74,7 @@ export default function VotePage() {
     return () => {
       active = false;
     };
-  }, [votable, alreadyVoted]);
+  }, [votable]);
 
   if (!state) return null;
 
@@ -91,7 +93,9 @@ export default function VotePage() {
     );
   }
 
-  if (alreadyVoted && state.vote) {
+  if (alreadyVoted) {
+    // 名前は候補一覧から引く（状態の更新を軽くするため、サーバーは名前を返さない）
+    const nameOf = (id: string) => candidates.find((c) => c.id === id)?.displayName ?? '（不明）';
     return (
       <div className="space-y-5">
         <header>
@@ -100,10 +104,16 @@ export default function VotePage() {
         </header>
         <ClassifiedPanel className="p-6 text-center" tone="intel" stamp="SUBMITTED">
           <CheckCircle2 className="mx-auto h-10 w-10 text-intel" aria-hidden />
-          <p className="mt-4 text-sm text-muted-foreground">あなたが投票した相手</p>
-          <p className="headline-mono mt-2 text-xl text-foreground">
-            {state.vote.targetDisplayName}
+          <p className="mt-4 text-sm text-muted-foreground">
+            あなたが選んだ {state.votedTargetIds.length} 人
           </p>
+          <ul className="mt-2 space-y-1">
+            {state.votedTargetIds.map((id) => (
+              <li key={id} className="headline-mono text-lg text-foreground">
+                {loading ? '…' : nameOf(id)}
+              </li>
+            ))}
+          </ul>
           <p className="mt-4 text-xs text-muted-foreground">
             投票は一度のみです。内容は変更できません。
           </p>
@@ -115,14 +125,29 @@ export default function VotePage() {
     );
   }
 
-  const selectedName = candidates.find((c) => c.id === selected)?.displayName ?? '';
+  const selectedNames = selected.map(
+    (id) => candidates.find((c) => c.id === id)?.displayName ?? '',
+  );
+  const atLimit = selected.length >= MAX_VOTE_TARGETS;
+
+  const toggle = (id: string) => {
+    setError(null);
+    setSelected((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= MAX_VOTE_TARGETS) {
+        setError(`選べるのは${MAX_VOTE_TARGETS}人までです。外してから選び直してください。`);
+        return prev;
+      }
+      return [...prev, id];
+    });
+  };
 
   const submit = async () => {
-    if (!selected) return;
+    if (selected.length === 0) return;
     setSubmitting(true);
     setError(null);
     try {
-      await apiSend('/api/participant/vote', { targetId: selected });
+      await apiSend('/api/participant/vote', { targetIds: selected });
       setConfirmOpen(false);
       await refresh();
     } catch (e) {
@@ -145,9 +170,12 @@ export default function VotePage() {
     <div className="space-y-5">
       <header>
         <p className="label-mono">FINAL VOTE</p>
-        <h1 className="headline-mono mt-1 text-lg text-primary">SPYだと思う人を1人選ぶ</h1>
+        <h1 className="headline-mono mt-1 text-lg text-primary">
+          SPYだと思う人を選ぶ（{MAX_VOTE_TARGETS}人まで）
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          投票は一度だけです。確定後は変更できません。
+          何人でも選べます（最大{MAX_VOTE_TARGETS}人）。当たった人数がそのまま点数になります。
+          送信は一度だけで、確定後は変更できません。
         </p>
       </header>
 
@@ -162,16 +190,17 @@ export default function VotePage() {
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="読み込み中" />
         </div>
       ) : (
-        <ul className="space-y-2" role="radiogroup" aria-label="投票先">
+        <ul className="space-y-2" aria-label="投票先">
           {candidates.map((c) => {
-            const active = selected === c.id;
+            const active = selected.includes(c.id);
             return (
               <li key={c.id}>
                 <button
                   type="button"
-                  role="radio"
+                  role="checkbox"
                   aria-checked={active}
-                  onClick={() => setSelected(c.id)}
+                  disabled={!active && atLimit}
+                  onClick={() => toggle(c.id)}
                   className={cn(
                     'flex w-full items-center gap-3 rounded-sm border p-4 text-left transition-colors',
                     active
@@ -187,7 +216,11 @@ export default function VotePage() {
                         : 'border-border text-muted-foreground',
                     )}
                   >
-                    <UserRound className="h-5 w-5" aria-hidden />
+                    {active ? (
+                      <Check className="h-5 w-5" aria-hidden />
+                    ) : (
+                      <UserRound className="h-5 w-5" aria-hidden />
+                    )}
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-base text-foreground">
@@ -211,10 +244,14 @@ export default function VotePage() {
             オフラインのため投票できません。電波が戻ってから確定してください。
           </p>
         ) : null}
+        <p className="mb-2 text-xs text-muted-foreground">
+          選択中 <span className="font-mono text-foreground">{selected.length}</span> /{' '}
+          {MAX_VOTE_TARGETS} 人
+        </p>
         <Button
           size="lg"
           className="w-full"
-          disabled={!selected || submitting || !online}
+          disabled={selected.length === 0 || submitting || !online}
           onClick={() => setConfirmOpen(true)}
         >
           投票を確認する
@@ -224,12 +261,18 @@ export default function VotePage() {
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>この人に投票しますか？</AlertDialogTitle>
-            <AlertDialogDescription>
-              <span className="headline-mono block py-2 text-lg text-foreground">
-                {selectedName}
-              </span>
-              投票は一度だけで、確定後は変更できません。
+            <AlertDialogTitle>この{selected.length}人に投票しますか？</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                <ul className="py-2">
+                  {selectedNames.map((name) => (
+                    <li key={name} className="headline-mono text-lg text-foreground">
+                      {name}
+                    </li>
+                  ))}
+                </ul>
+                <p>投票は一度だけで、確定後は変更できません。</p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
