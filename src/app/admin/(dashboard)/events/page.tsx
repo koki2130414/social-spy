@@ -3,7 +3,16 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Download, Loader2, Plus, QrCode, Save } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  Download,
+  Loader2,
+  Plus,
+  QrCode,
+  Save,
+  Trash2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +23,40 @@ import { apiGet, apiSend, ApiError } from '@/lib/api';
 import { eventSchema, type EventFormValues } from '@/lib/validation';
 import { isoToLocalInput, localInputToIso } from '@/lib/datetime';
 import { generateEventCode } from '@/lib/utils';
+import { formatDateTime } from '@/lib/datetime';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import type { SpyEvent } from '@/lib/types';
+
+interface EventSummary extends SpyEvent {
+  participantCount: number;
+  voteCount: number;
+}
+
+const PHASE_LABEL: Record<string, string> = {
+  LOBBY: '受付中',
+  ACTIVE: '進行中',
+  SPY_MISSION_REVEALED: 'SPY公開',
+  VOTING: '投票中',
+  IDENTITY_REVEALED: '正体公開',
+  FINISHED: '終了',
+};
 
 interface QrData {
   joinUrl: string;
@@ -27,6 +70,12 @@ export default function AdminEventsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [qr, setQr] = useState<QrData | null>(null);
+  // 過去のイベントも含めた一覧（管理用）
+  const [summaries, setSummaries] = useState<EventSummary[] | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<EventSummary | null>(null);
+  const [typedCode, setTypedCode] = useState('');
 
   const form = useForm<EventFormValues>({
     resolver: zodResolver(eventSchema),
@@ -69,6 +118,63 @@ export default function AdminEventsPage() {
       active = false;
     };
   }, [eventId, event?.code]);
+
+  /** 一覧を取り直す。人数と投票数も一緒に来る */
+  const reloadSummaries = async () => {
+    try {
+      const res = await apiGet<{ events: EventSummary[] }>('/api/admin/events?summary=1');
+      setSummaries(res.events);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'イベント一覧を取得できませんでした。');
+    }
+  };
+
+  useEffect(() => {
+    void reloadSummaries();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** しまう／戻す。記録は消えない */
+  const toggleArchive = async (row: EventSummary) => {
+    setBusyId(row.id);
+    setError(null);
+    try {
+      await apiSend(
+        `/api/admin/events/${row.id}/archive`,
+        { archived: row.archivedAt === null },
+        'PATCH',
+      );
+      await Promise.all([reloadSummaries(), reloadEvents()]);
+      setMessage(row.archivedAt === null ? 'イベントをしまいました。' : 'イベントを戻しました。');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '変更できませんでした。');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /**
+   * イベントを消す。
+   *
+   * 参加者ごと消えるので、確認ダイアログでイベントコードを打ってもらう。
+   * 投票が入っているイベントはサーバー側が断る（記録を守るため）。
+   */
+  const removeEvent = async () => {
+    if (!confirmDelete) return;
+    setBusyId(confirmDelete.id);
+    setError(null);
+    try {
+      await apiSend(`/api/admin/events/${confirmDelete.id}`, undefined, 'DELETE');
+      await Promise.all([reloadSummaries(), reloadEvents()]);
+      setMessage(`「${confirmDelete.name}」を削除しました。`);
+      setConfirmDelete(null);
+      setTypedCode('');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '削除できませんでした。');
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const startCreate = () => {
     setMode('create');
@@ -120,6 +226,118 @@ export default function AdminEventsPage() {
           新規作成
         </Button>
       </header>
+
+      {/* イベント一覧（過去のものも含む） */}
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="label-mono">イベント一覧</p>
+          <Button size="sm" variant="outline" onClick={() => setShowArchived((v) => !v)}>
+            {showArchived ? 'しまったものを隠す' : 'しまったものも表示'}
+          </Button>
+        </div>
+        <div className="rounded-sm border border-border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>イベント名</TableHead>
+                <TableHead>コード</TableHead>
+                <TableHead>開催日時</TableHead>
+                <TableHead>状態</TableHead>
+                <TableHead>参加者</TableHead>
+                <TableHead>投票</TableHead>
+                <TableHead>操作</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(summaries ?? [])
+                .filter((row) => showArchived || row.archivedAt === null)
+                .map((row) => (
+                  <TableRow key={row.id} className={row.id === eventId ? 'bg-intel/10' : undefined}>
+                    <TableCell className="text-foreground">
+                      <button
+                        type="button"
+                        className="text-left hover:underline"
+                        onClick={() => setEventId(row.id)}
+                        title="このイベントを選ぶ"
+                      >
+                        {row.name}
+                      </button>
+                      {row.archivedAt ? (
+                        <Badge variant="outline" className="ml-2">
+                          しまってある
+                        </Badge>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="font-mono text-muted-foreground">{row.code}</TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {formatDateTime(row.startsAt)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={row.phase === 'FINISHED' ? 'outline' : 'intel'}>
+                        {PHASE_LABEL[row.phase] ?? row.phase}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono tabular-nums text-foreground">
+                      {row.participantCount}
+                    </TableCell>
+                    <TableCell className="font-mono tabular-nums text-muted-foreground">
+                      {row.voteCount}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busyId === row.id}
+                          onClick={() => void toggleArchive(row)}
+                          title={
+                            row.archivedAt
+                              ? '一覧の手前に戻す'
+                              : '終わったイベントをしまう（記録は消えません）'
+                          }
+                        >
+                          {row.archivedAt ? (
+                            <ArchiveRestore className="h-3.5 w-3.5" aria-hidden />
+                          ) : (
+                            <Archive className="h-3.5 w-3.5" aria-hidden />
+                          )}
+                          {row.archivedAt ? '戻す' : 'しまう'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busyId === row.id || row.voteCount > 0}
+                          onClick={() => {
+                            setConfirmDelete(row);
+                            setTypedCode('');
+                          }}
+                          title={
+                            row.voteCount > 0
+                              ? '投票が入っているイベントは削除できません（しまうを使ってください）'
+                              : 'このイベントを完全に削除する'
+                          }
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                          削除
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              {summaries === null ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                    読み込み中…
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          投票が入ったイベントは削除できません。記録を残すため「しまう」で一覧から外してください。
+        </p>
+      </section>
 
       {events.length === 0 && mode === 'edit' ? (
         <p className="text-sm text-muted-foreground">
@@ -216,7 +434,10 @@ export default function AdminEventsPage() {
           </div>
 
           {error ? (
-            <p role="alert" className="border border-primary/50 bg-primary/10 p-3 text-sm text-primary">
+            <p
+              role="alert"
+              className="border border-primary/50 bg-primary/10 p-3 text-sm text-primary"
+            >
               {error}
             </p>
           ) : null}
@@ -264,6 +485,60 @@ export default function AdminEventsPage() {
           )}
         </aside>
       </div>
+
+      <AlertDialog
+        open={confirmDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmDelete(null);
+            setTypedCode('');
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>「{confirmDelete?.name}」を削除しますか？</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 pt-2 text-sm">
+                <p>
+                  参加者 {confirmDelete?.participantCount} 名と、配ったQR・番号・パスワード、
+                  MISSIONの達成状況が<strong className="text-foreground">すべて消えます</strong>。
+                  元には戻せません。
+                </p>
+                <p>
+                  残しておきたい場合は「しまう」を使ってください（一覧から外れるだけで、記録は残ります）。
+                </p>
+                <div className="space-y-1 pt-2">
+                  <Label htmlFor="confirm-code">
+                    確認のため、イベントコード
+                    <span className="font-mono text-foreground"> {confirmDelete?.code} </span>
+                    を入力してください
+                  </Label>
+                  <Input
+                    id="confirm-code"
+                    value={typedCode}
+                    onChange={(e) => setTypedCode(e.target.value)}
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busyId !== null}>キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void removeEvent();
+              }}
+              disabled={busyId !== null || typedCode.trim() !== confirmDelete?.code}
+            >
+              {busyId ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+              完全に削除する
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
