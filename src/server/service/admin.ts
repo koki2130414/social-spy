@@ -151,6 +151,74 @@ export async function listEvents(): Promise<SpyEvent[]> {
   return getRepo().listEvents();
 }
 
+export interface EventSummary extends SpyEvent {
+  /** 当日いる人（欠席を除いた人数） */
+  participantCount: number;
+  /** 投票が入っているか。入っていると消せない（記録を守るため） */
+  voteCount: number;
+}
+
+/**
+ * 運営のイベント管理画面に出す一覧。
+ *
+ * 過去のイベントも含めて全部返し、しまってあるものは archivedAt で分かるようにする。
+ * イベントの数は多くても数十なので、1件ずつ数えても重くならない
+ * （人数は行を運ばない数え上げを使う）。
+ */
+export async function listEventSummaries(): Promise<EventSummary[]> {
+  await requireAdmin();
+  const repo = getRepo();
+  const events = await repo.listEvents();
+  return Promise.all(
+    events.map(async (event) => {
+      const [participantCount, voteCount] = await Promise.all([
+        repo.countParticipants(event.id),
+        repo.countVotes(event.id),
+      ]);
+      return { ...event, participantCount, voteCount };
+    }),
+  );
+}
+
+/**
+ * イベントをしまう／戻す。
+ *
+ * 終わったイベントが選択欄に並び続けると、当日に選び間違える。
+ * 消すのではなくしまうだけなので、達成率も投票の記録も残る。
+ */
+export async function setEventArchived(eventId: string, archived: boolean): Promise<SpyEvent> {
+  await requireEventAccess(eventId);
+  return getRepo().setEventArchived(eventId, archived);
+}
+
+/**
+ * イベントを完全に消す。
+ *
+ * 投票が1件でも入っていたら消さない。
+ * votes には削除禁止のトリガがあるため、消そうとすると
+ * 参加者だけ消えてイベントが残る「半分だけ消えた」状態になりうる。
+ * その場合はアーカイブを使ってもらう。
+ *
+ * 参加者がいるイベントは、コードの入力による確認を画面側で必須にしている。
+ */
+export async function deleteEvent(eventId: string): Promise<{ deletedParticipants: number }> {
+  await requireEventAccess(eventId);
+  const repo = getRepo();
+  const [participantCount, voteCount] = await Promise.all([
+    repo.countParticipants(eventId),
+    repo.countVotes(eventId),
+  ]);
+  if (voteCount > 0) {
+    throw new ServiceError(
+      'EVENT_HAS_VOTES',
+      '投票が入っているイベントは削除できません。記録を残すため「しまう」を使ってください。',
+      409,
+    );
+  }
+  await repo.deleteEvent(eventId);
+  return { deletedParticipants: participantCount };
+}
+
 export async function getEvent(eventId: string): Promise<SpyEvent> {
   const { event } = await requireEventAccess(eventId);
   return event;
