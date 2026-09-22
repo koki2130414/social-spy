@@ -40,7 +40,7 @@ function buildState(overrides: Partial<ParticipantGameState> = {}): ParticipantG
     spyMissions: null,
     spyMissionsPublic: false,
     notifications: [],
-    vote: null,
+    votedTargetIds: [],
     participantCount: 12,
     ...overrides,
   };
