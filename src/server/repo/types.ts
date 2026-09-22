@@ -75,6 +75,8 @@ export interface Repo {
   getParticipant(id: string): Promise<Participant | null>;
   /** 機密（role を含む）。管理者権限を確認した後にのみ呼ぶこと */
   listParticipants(eventId: string): Promise<Participant[]>;
+  /** 人数だけを数える。参加者の行を運ばないので、画面の定期更新から呼べる */
+  countParticipants(eventId: string): Promise<number>;
   findParticipantByName(eventId: string, displayName: string): Promise<Participant | null>;
   findParticipantByLoginId(eventId: string, loginId: string): Promise<Participant | null>;
   /**

@@ -256,6 +256,10 @@ export class DemoRepo implements Repo {
       .sort((a, b) => a.joinedAt.localeCompare(b.joinedAt));
   }
 
+  async countParticipants(eventId: string): Promise<number> {
+    return state().participants.filter((p) => p.eventId === eventId).length;
+  }
+
   async findParticipantByName(eventId: string, displayName: string): Promise<Participant | null> {
     return (
       state().participants.find(

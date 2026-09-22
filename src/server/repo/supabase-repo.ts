@@ -320,6 +320,22 @@ export class SupabaseRepo implements Repo {
     return unwrap(data, error, 'listParticipants').map(mapParticipant);
   }
 
+  /**
+   * 人数だけを数える。
+   *
+   * head: true を付けると行は返らず件数だけが返る。
+   * 参加者画面は15秒ごとに人数を表示するだけなので、
+   * ここで101行を運ぶと、その通信が101台ぶん同時に走る。
+   */
+  async countParticipants(eventId: string): Promise<number> {
+    const { count, error } = await this.db
+      .from('participants')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', eventId);
+    if (error) throw new Error(`countParticipants: ${error.message}`);
+    return count ?? 0;
+  }
+
   async findParticipantByName(eventId: string, displayName: string): Promise<Participant | null> {
     const { data, error } = await this.db
       .from('participants')
