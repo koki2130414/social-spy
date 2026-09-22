@@ -5,8 +5,18 @@ import type {
   PublicParticipant,
   RankingRow,
 } from '@/lib/types';
-import { canRegister, canUpdateMissionProgress, isIdentityRevealed } from '@/lib/core/phase';
+import {
+  canRegister,
+  canUpdateMissionProgress,
+  isIdentityRevealed,
+  isSpyMissionPublic,
+} from '@/lib/core/phase';
 import { visibleSpyMissions } from '@/lib/core/intel';
+
+/** 役割の判定はここ1か所に寄せる（画面ごとに書き分けると取りこぼす） */
+function isSpy(participant: { role: string }): boolean {
+  return participant.role === 'SPY';
+}
 import { toPublicParticipant, toPublicParticipants } from '@/lib/core/spy';
 import { computeResults, validateVote, VOTE_REJECTION_MESSAGE } from '@/lib/core/vote';
 import { getRepo } from '@/server/repo';
@@ -181,18 +191,25 @@ export async function getGameState(): Promise<ParticipantGameState> {
     throw new ServiceError('NOT_ATTENDING', '欠席として登録されています。', 401);
   }
 
-  const [assigned, notifications, vote, participants] = await Promise.all([
+  // この画面は101台が15秒おきに叩き、フェーズが変わった瞬間には全員が同時に叩く。
+  // 1回ぶんの重さがそのまま101倍になるので、次の3点を守る。
+  //  ・参加者の表を丸ごと取らない（人数は数え上げ、投票先は1件だけ引く）
+  //  ・問い合わせは待ち合わせの回数を減らして、1回のまとまりで流す
+  //  ・その場面で要らないものは引かない（SPY MISSIONの一覧は公開後だけ）
+  const needsPublicSpyMissions = !isSpy(me) && isSpyMissionPublic(event.phase);
+
+  const [assigned, notifications, vote, participantCount, eventMissions] = await Promise.all([
     repo.listAssignedMissions(me.id),
     repo.listNotifications(event.id),
     repo.getVoteByVoter(event.id, me.id),
-    repo.listParticipants(event.id),
+    repo.countParticipants(event.id),
+    needsPublicSpyMissions ? repo.listMissions(event.id) : Promise.resolve([]),
   ]);
 
   const generalMissions = assigned.filter((m) => m.kind === 'GENERAL');
   const ownSpyMissions = assigned.filter((m) => m.kind === 'SPY');
 
   // 公開用のSPY MISSION一覧（内容のみ。誰の達成状況かは分からない）
-  const eventMissions = await repo.listMissions(event.id);
   const publicSpyMissions: AssignedMission[] = eventMissions
     .filter((m) => m.kind === 'SPY' && m.active)
     .map((m, i) => ({
@@ -210,12 +227,13 @@ export async function getGameState(): Promise<ParticipantGameState> {
 
   const spyMissions = visibleSpyMissions({
     phase: event.phase,
-    isSpy: me.role === 'SPY',
+    isSpy: isSpy(me),
     ownSpyMissions,
     publicSpyMissions,
   });
 
-  const votedTarget = vote ? participants.find((p) => p.id === vote.targetParticipantId) : null;
+  // 投票先の名前だけが要る。そのためだけに全員を取らず、その1人を引く
+  const votedTarget = vote ? await repo.getParticipant(vote.targetParticipantId) : null;
 
   const endsAt = event.activeStartedAt
     ? new Date(
@@ -239,18 +257,18 @@ export async function getGameState(): Promise<ParticipantGameState> {
       displayName: me.displayName,
       affiliation: me.affiliation,
       role: me.role,
-      isSpy: me.role === 'SPY',
+      isSpy: isSpy(me),
     },
     missions: generalMissions,
     completedCount: generalMissions.filter((m) => m.completed).length,
     totalCount: generalMissions.length,
     spyMissions,
-    spyMissionsPublic: spyMissions !== null && me.role !== 'SPY',
+    spyMissionsPublic: spyMissions !== null && !isSpy(me),
     notifications,
     vote: votedTarget
       ? { targetParticipantId: votedTarget.id, targetDisplayName: votedTarget.displayName }
       : null,
-    participantCount: participants.length,
+    participantCount,
   };
 }
 

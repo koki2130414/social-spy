@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import QRCode from 'qrcode';
+import { cachedMissionProgress } from './progress-cache';
 import type {
   GamePhase,
   GameResult,
@@ -309,8 +310,10 @@ export async function listAdminParticipants(eventId: string): Promise<AdminParti
   await requireEventAccess(eventId);
   const repo = getRepo();
   const [participants, progress, votes, issuedPasswords] = await Promise.all([
+    // 出欠・役割・パスワードは押した直後に反映されてほしいので、毎回そのまま読む。
+    // 達成数だけは数秒古くても困らないため、共有のキャッシュを通す
     repo.listParticipants(eventId),
-    repo.missionProgress(eventId),
+    cachedMissionProgress(eventId),
     repo.listVotes(eventId),
     // 運営権限は requireEventAccess で確認済み。参加者向けには決して返さない
     repo.listIssuedPasswords(eventId),
@@ -708,7 +711,7 @@ export async function getDashboard(eventId: string, joinUrl: string): Promise<Ad
   const repo = getRepo();
   const [participants, progress, votes, notifications] = await Promise.all([
     repo.listParticipants(eventId),
-    repo.missionProgress(eventId),
+    cachedMissionProgress(eventId),
     repo.listVotes(eventId),
     repo.listNotifications(eventId),
   ]);

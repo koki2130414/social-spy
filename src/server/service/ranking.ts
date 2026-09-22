@@ -2,6 +2,7 @@ import type { GamePhase, RankingRow } from '@/lib/types';
 import { isIdentityRevealed } from '@/lib/core/phase';
 import { computeRanking } from '@/lib/core/score';
 import { getRepo } from '@/server/repo';
+import { cachedMissionProgress, clearProgressCache } from './progress-cache';
 
 /**
  * 達成率ランキングの組み立てと、短時間のキャッシュ。
@@ -32,9 +33,10 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>();
 
-/** テスト用。キャッシュの状態を持ち越さないようにする */
+/** テスト用。キャッシュの状態を持ち越さないようにする（元にした集計も一緒に捨てる） */
 export function clearRankingCache(): void {
   cache.clear();
+  clearProgressCache();
 }
 
 /**
@@ -56,7 +58,8 @@ export async function buildRanking(
   const repo = getRepo();
   const [participants, progress] = await Promise.all([
     repo.listParticipants(eventId),
-    repo.missionProgress(eventId),
+    // 重い集計は運営画面とも共有する（同じ集計を何度も走らせない）
+    cachedMissionProgress(eventId, now),
   ]);
 
   const rows = computeRanking(participants, progress, {
