@@ -128,7 +128,7 @@ export default function GameHomePage() {
       <section className="flex flex-wrap items-center gap-2 pt-2">
         <Badge variant="outline">EVENT {state.event.code}</Badge>
         <Badge variant="outline">参加者 {state.participantCount}名</Badge>
-        {state.vote ? <Badge variant="intel">投票済み</Badge> : null}
+        {state.votedTargetIds.length > 0 ? <Badge variant="intel">投票済み</Badge> : null}
       </section>
     </div>
   );
