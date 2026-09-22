@@ -18,6 +18,7 @@ import {
   pickSpyMissions,
 } from '@/lib/core/missions';
 import { normalizeEventCode } from '@/lib/utils';
+import { MAX_VOTE_TARGETS } from '@/lib/core/vote';
 import {
   buildDemoDataset,
   buildSampleVotes,
@@ -520,6 +521,34 @@ export class DemoRepo implements Repo {
     return (
       state().votes.find((v) => v.eventId === eventId && v.voterParticipantId === voterId) ?? null
     );
+  }
+
+  async listVotesByVoter(eventId: string, voterId: string): Promise<Vote[]> {
+    return state().votes.filter((v) => v.eventId === eventId && v.voterParticipantId === voterId);
+  }
+
+  /** DB の制約に相当する不変条件（重複・上限）をここでも守る */
+  async insertVotes(
+    eventId: string,
+    voterId: string,
+    targetIds: readonly string[],
+  ): Promise<Vote[]> {
+    const s = state();
+    const mine = s.votes.filter((v) => v.eventId === eventId && v.voterParticipantId === voterId);
+    if (mine.length > 0) throw new Error('ALREADY_VOTED');
+    if (targetIds.some((t) => t === voterId)) throw new Error('SELF_VOTE_FORBIDDEN');
+    if (new Set(targetIds).size !== targetIds.length) throw new Error('ALREADY_VOTED');
+    if (targetIds.length > MAX_VOTE_TARGETS) throw new Error('TOO_MANY_TARGETS');
+
+    const created = targetIds.map((targetId) => ({
+      id: nextId('vt'),
+      eventId,
+      voterParticipantId: voterId,
+      targetParticipantId: targetId,
+      createdAt: now(),
+    }));
+    s.votes.push(...created);
+    return created;
   }
 
   async listVotes(eventId: string): Promise<Vote[]> {

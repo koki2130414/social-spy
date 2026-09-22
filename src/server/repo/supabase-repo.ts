@@ -684,14 +684,56 @@ export class SupabaseRepo implements Repo {
   /* ----------------- votes ---------------- */
 
   async getVoteByVoter(eventId: string, voterId: string): Promise<Vote | null> {
+    const rows = await this.listVotesByVoter(eventId, voterId);
+    return rows[0] ?? null;
+  }
+
+  /**
+   * その人が選んだ相手すべて。
+   *
+   * 1人が複数選べるようになったので、1件に絞る maybeSingle は使えない
+   * （2件以上あるとエラーになり、投票済みの人の画面が開かなくなる）。
+   */
+  async listVotesByVoter(eventId: string, voterId: string): Promise<Vote[]> {
     const { data, error } = await this.db
       .from('votes')
       .select('*')
       .eq('event_id', eventId)
       .eq('voter_participant_id', voterId)
-      .maybeSingle();
-    if (error) throw new Error(`getVoteByVoter: ${error.message}`);
-    return data ? mapVote(data) : null;
+      .order('created_at', { ascending: true });
+    if (error) throw new Error(`listVotesByVoter: ${error.message}`);
+    return (data ?? []).map(mapVote);
+  }
+
+  /**
+   * 選んだ相手をまとめて登録する。
+   *
+   * 1回の insert にまとめているので、途中で弾かれたときは
+   * 1件も残らない（「3人中2人だけ入った」という状態を作らない）。
+   */
+  async insertVotes(
+    eventId: string,
+    voterId: string,
+    targetIds: readonly string[],
+  ): Promise<Vote[]> {
+    if (targetIds.length === 0) return [];
+    const { data, error } = await this.db
+      .from('votes')
+      .insert(
+        targetIds.map((targetId) => ({
+          event_id: eventId,
+          voter_participant_id: voterId,
+          target_participant_id: targetId,
+        })),
+      )
+      .select('*');
+    if (error) {
+      if (error.code === '23505') throw new Error('ALREADY_VOTED');
+      if (error.code === '23514') throw new Error('SELF_VOTE_FORBIDDEN');
+      if (error.message.includes('TOO_MANY_TARGETS')) throw new Error('TOO_MANY_TARGETS');
+      throw new Error(`insertVotes: ${error.message}`);
+    }
+    return (data ?? []).map(mapVote);
   }
 
   async listVotes(eventId: string): Promise<Vote[]> {

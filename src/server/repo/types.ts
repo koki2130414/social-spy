@@ -141,8 +141,12 @@ export interface Repo {
 
   /* ----------------- votes ---------------- */
   getVoteByVoter(eventId: string, voterId: string): Promise<Vote | null>;
+  /** その人が選んだ相手すべて（複数選択のため） */
+  listVotesByVoter(eventId: string, voterId: string): Promise<Vote[]>;
   listVotes(eventId: string): Promise<Vote[]>;
   insertVote(eventId: string, voterId: string, targetId: string): Promise<Vote>;
+  /** 選んだ相手をまとめて登録する。1件でも入らなければ何も残さない */
+  insertVotes(eventId: string, voterId: string, targetIds: readonly string[]): Promise<Vote[]>;
 
   /* ------------- push 通知 ---------------- */
   savePushSubscription(input: {
