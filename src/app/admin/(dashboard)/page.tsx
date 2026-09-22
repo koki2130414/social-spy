@@ -80,6 +80,8 @@ export default function AdminDashboardPage() {
     5000,
   );
   const [pending, setPending] = useState<GamePhase | null>(null);
+  /** 押した直後に先に反映するための、変更後のイベント */
+  const [justChanged, setJustChanged] = useState<SpyEvent | null>(null);
   const [confirm, setConfirm] = useState<GamePhase | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -101,21 +103,37 @@ export default function AdminDashboardPage() {
     );
   }
 
+  /**
+   * フェーズを進める。
+   *
+   * 変更後のイベントは応答に入っているので、それを先に画面へ反映する。
+   * 集計の取り直し（ダッシュボードとイベント一覧）は裏で走らせる。
+   * 以前はそこまで待ってからボタンを戻していたため、
+   * 「押してから反映まで遅い」の大半がこの待ち時間だった。
+   */
   const changePhase = async (to: GamePhase) => {
     setPending(to);
     setActionError(null);
     try {
-      await apiSend(`/api/admin/events/${eventId}/phase`, { to });
-      await Promise.all([refresh(), reloadEvents()]);
+      const updated = await apiSend<SpyEvent>(`/api/admin/events/${eventId}/phase`, { to });
+      setJustChanged(updated);
+      setConfirm(null);
+      void Promise.all([refresh(), reloadEvents()]);
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'フェーズを変更できませんでした。');
     } finally {
       setPending(null);
-      setConfirm(null);
     }
   };
 
-  const { event } = data;
+  // 押した直後は、取り直しを待たずに新しいフェーズで描く。
+  // 取り直しが終われば、そちらのほうが新しいので自然に入れ替わる
+  const event =
+    justChanged &&
+    justChanged.id === data.event.id &&
+    justChanged.phaseChangedAt > data.event.phaseChangedAt
+      ? justChanged
+      : data.event;
 
   return (
     <div className="space-y-6">
