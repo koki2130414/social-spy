@@ -9,7 +9,18 @@ export type VoteRejection =
   | 'TARGET_NOT_FOUND'
   | 'TARGET_OTHER_EVENT'
   | 'TARGET_NOT_ATTENDING'
-  | 'VOTER_NOT_ATTENDING';
+  | 'VOTER_NOT_ATTENDING'
+  | 'NO_TARGET_SELECTED'
+  | 'TOO_MANY_TARGETS';
+
+/**
+ * 1人が選べる人数の上限。
+ *
+ * 上限が無いと「全員を選べば全員正解」になり、勘が働いた人と差がつかない。
+ * 10人までなら、101人の中から絞り込む意味が残る。
+ * 画面・サーバー・データベースの3か所で同じ数を守る。
+ */
+export const MAX_VOTE_TARGETS = 10;
 
 export const VOTE_REJECTION_MESSAGE: Record<VoteRejection, string> = {
   PHASE_NOT_VOTING: '現在は投票を受け付けていません。',
@@ -19,15 +30,20 @@ export const VOTE_REJECTION_MESSAGE: Record<VoteRejection, string> = {
   TARGET_OTHER_EVENT: '同じイベントの参加者にのみ投票できます。',
   TARGET_NOT_ATTENDING: 'その参加者は欠席として登録されています。',
   VOTER_NOT_ATTENDING: '欠席として登録されているため投票できません。運営にお声がけください。',
+  NO_TARGET_SELECTED: 'SPYだと思う人を1人以上選んでください。',
+  TOO_MANY_TARGETS: `選べるのは${MAX_VOTE_TARGETS}人までです。`,
 };
 
 export interface VoteValidationInput {
   phase: GamePhase;
   voterId: string;
-  targetId: string;
+  /** 選んだ相手。重複は呼び出し前に取り除いておく */
+  targetIds: readonly string[];
   eventId: string;
+  /** すでに投票済みなら、その票（1件でもあれば投票済みとみなす） */
   existingVote: Vote | null;
-  target: { id: string; eventId: string; attending: boolean } | null;
+  /** 選ばれた相手の情報。見つからなかった相手は含めない */
+  targets: readonly { id: string; eventId: string; attending: boolean }[];
   /** 投票しようとしている本人が当日来ていることになっているか */
   voterAttending: boolean;
 }
@@ -42,11 +58,19 @@ export type VoteValidationResult = { ok: true } | { ok: false; reason: VoteRejec
 export function validateVote(input: VoteValidationInput): VoteValidationResult {
   if (!canVoteInPhase(input.phase)) return { ok: false, reason: 'PHASE_NOT_VOTING' };
   if (input.existingVote) return { ok: false, reason: 'ALREADY_VOTED' };
-  if (input.voterId === input.targetId) return { ok: false, reason: 'SELF_VOTE_FORBIDDEN' };
-  if (!input.target) return { ok: false, reason: 'TARGET_NOT_FOUND' };
-  if (input.target.eventId !== input.eventId) return { ok: false, reason: 'TARGET_OTHER_EVENT' };
+  if (input.targetIds.length === 0) return { ok: false, reason: 'NO_TARGET_SELECTED' };
+  if (input.targetIds.length > MAX_VOTE_TARGETS) return { ok: false, reason: 'TOO_MANY_TARGETS' };
+  if (input.targetIds.includes(input.voterId)) return { ok: false, reason: 'SELF_VOTE_FORBIDDEN' };
+  if (input.targets.length !== input.targetIds.length) {
+    return { ok: false, reason: 'TARGET_NOT_FOUND' };
+  }
+  if (input.targets.some((t) => t.eventId !== input.eventId)) {
+    return { ok: false, reason: 'TARGET_OTHER_EVENT' };
+  }
   if (!input.voterAttending) return { ok: false, reason: 'VOTER_NOT_ATTENDING' };
-  if (!input.target.attending) return { ok: false, reason: 'TARGET_NOT_ATTENDING' };
+  if (input.targets.some((t) => !t.attending)) {
+    return { ok: false, reason: 'TARGET_NOT_ATTENDING' };
+  }
   return { ok: true };
 }
 
@@ -86,7 +110,12 @@ export function computeResults(
     }))
     .sort((a, b) => b.votes - a.votes || a.displayName.localeCompare(b.displayName, 'ja'));
 
-  const correctVoters = countedVotes.filter((v) => spyIds.has(v.targetParticipantId)).length;
+  // 1人が何人も選べるので「当たった票の数」と「当てた人の数」は別物になる。
+  // 表彰で読み上げるのは人数のほうなので、投票者で重複を除く
+  const correctVoters = new Set(
+    countedVotes.filter((v) => spyIds.has(v.targetParticipantId)).map((v) => v.voterParticipantId),
+  ).size;
+  const correctBallots = countedVotes.filter((v) => spyIds.has(v.targetParticipantId)).length;
 
   return {
     spies: spies.map(toPublicParticipant),
@@ -94,5 +123,6 @@ export function computeResults(
     totalVotes: countedVotes.length,
     totalParticipants: present.length,
     correctVoters,
+    correctBallots,
   };
 }

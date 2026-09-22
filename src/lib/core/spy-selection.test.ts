@@ -81,7 +81,7 @@ describe('欠席者と投票', () => {
   const base = {
     phase: 'VOTING' as const,
     voterId: 'p1',
-    targetId: 'p2',
+    targetIds: ['p2'],
     eventId: 'ev1',
     existingVote: null,
   };
@@ -90,7 +90,7 @@ describe('欠席者と投票', () => {
     expect(
       validateVote({
         ...base,
-        target: { id: 'p2', eventId: 'ev1', attending: true },
+        targets: [{ id: 'p2', eventId: 'ev1', attending: true }],
         voterAttending: false,
       }),
     ).toEqual({ ok: false, reason: 'VOTER_NOT_ATTENDING' });
@@ -100,7 +100,7 @@ describe('欠席者と投票', () => {
     expect(
       validateVote({
         ...base,
-        target: { id: 'p2', eventId: 'ev1', attending: false },
+        targets: [{ id: 'p2', eventId: 'ev1', attending: false }],
         voterAttending: true,
       }),
     ).toEqual({ ok: false, reason: 'TARGET_NOT_ATTENDING' });
@@ -110,7 +110,7 @@ describe('欠席者と投票', () => {
     expect(
       validateVote({
         ...base,
-        target: { id: 'p2', eventId: 'ev1', attending: true },
+        targets: [{ id: 'p2', eventId: 'ev1', attending: true }],
         voterAttending: true,
       }),
     ).toEqual({ ok: true });

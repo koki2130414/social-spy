@@ -27,10 +27,10 @@ function participant(
 const base = {
   phase: 'VOTING' as const,
   voterId: 'p1',
-  targetId: 'p2',
+  targetIds: ['p2'],
   eventId: 'ev1',
   existingVote: null,
-  target: { id: 'p2', eventId: 'ev1', attending: true },
+  targets: [{ id: 'p2', eventId: 'ev1', attending: true }],
   voterAttending: true,
 };
 
@@ -42,8 +42,8 @@ describe('投票の検証', () => {
   it('自分自身へは投票できない', () => {
     const result = validateVote({
       ...base,
-      targetId: 'p1',
-      target: { id: 'p1', eventId: 'ev1', attending: true },
+      targetIds: ['p1'],
+      targets: [{ id: 'p1', eventId: 'ev1', attending: true }],
     });
     expect(result).toEqual({ ok: false, reason: 'SELF_VOTE_FORBIDDEN' });
   });
@@ -65,8 +65,8 @@ describe('投票の検証', () => {
       validateVote({
         ...base,
         existingVote,
-        targetId: 'p4',
-        target: { id: 'p4', eventId: 'ev1', attending: true },
+        targetIds: ['p4'],
+        targets: [{ id: 'p4', eventId: 'ev1', attending: true }],
       }),
     ).toEqual({ ok: false, reason: 'ALREADY_VOTED' });
   });
@@ -87,12 +87,12 @@ describe('投票の検証', () => {
   });
 
   it('存在しない参加者・別イベントの参加者へは投票できない', () => {
-    expect(validateVote({ ...base, target: null })).toEqual({
+    expect(validateVote({ ...base, targets: [] })).toEqual({
       ok: false,
       reason: 'TARGET_NOT_FOUND',
     });
     expect(
-      validateVote({ ...base, target: { id: 'p2', eventId: 'ev2', attending: true } }),
+      validateVote({ ...base, targets: [{ id: 'p2', eventId: 'ev2', attending: true }] }),
     ).toEqual({
       ok: false,
       reason: 'TARGET_OTHER_EVENT',
@@ -169,5 +169,44 @@ describe('SPYの選出', () => {
     const participants = [participant('a')];
     const { spyIds } = selectSpies(participants, 5);
     expect(spyIds).toHaveLength(1);
+  });
+});
+
+describe('集計（複数選べるようになった後）', () => {
+  it('「当てた人数」は人で数える（1人が複数当てても1人）', () => {
+    const people = [
+      participant('spy1', 'SPY'),
+      participant('spy2', 'SPY'),
+      participant('a'),
+      participant('b'),
+    ];
+    const votes: Vote[] = [
+      {
+        id: 'v1',
+        eventId: 'ev1',
+        voterParticipantId: 'a',
+        targetParticipantId: 'spy1',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'v2',
+        eventId: 'ev1',
+        voterParticipantId: 'a',
+        targetParticipantId: 'spy2',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'v3',
+        eventId: 'ev1',
+        voterParticipantId: 'b',
+        targetParticipantId: 'a',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+    const result = computeResults(people, votes);
+
+    expect(result.correctVoters).toBe(1); // 当てたのは a だけ
+    expect(result.correctBallots).toBe(2); // 当たった票は2票
+    expect(result.totalVotes).toBe(3);
   });
 });
