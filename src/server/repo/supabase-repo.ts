@@ -442,15 +442,93 @@ export class SupabaseRepo implements Repo {
     if (error) console.warn(`setParticipantLoginAttempts: ${error.message}`);
   }
 
+  /**
+   * SPYをまとめて決める。
+   *
+   * 以前は参加者を1人ずつ見て更新していたため、101人のイベントでは
+   * 問い合わせが人数ぶん並び、「ゲーム開始」を押してから数秒待たされていた。
+   * データベースが東京・アプリが米国だと1往復が約240msかかるので、
+   * 往復の回数がそのまま待ち時間になる。
+   *
+   * いまは人数によらず決まった回数（8回前後）で終わる。
+   */
   async setParticipantRoles(eventId: string, spyIds: string[]): Promise<Participant[]> {
-    const participants = await this.listParticipants(eventId);
-    const spySet = new Set(spyIds);
-    for (const p of participants) {
-      const role: ParticipantRole = spySet.has(p.id) ? 'SPY' : 'AGENT';
-      if (p.role !== role) await this.setParticipantRole(p.id, role);
-      else if (role === 'SPY') await this.assignSpyMissions(p.id);
+    const now = new Date().toISOString();
+    const spySet = [...new Set(spyIds)];
+
+    // ① SPY以外を全員 AGENT に戻す（前回のSPYが残らないように）
+    const toAgent = this.db
+      .from('participants')
+      .update({ role: 'AGENT', updated_at: now })
+      .eq('event_id', eventId)
+      .neq('role', 'AGENT');
+    const { error: agentError } =
+      spySet.length > 0 ? await toAgent.not('id', 'in', `(${spySet.join(',')})`) : await toAgent;
+    if (agentError) throw new Error(`setParticipantRoles(agent): ${agentError.message}`);
+
+    if (spySet.length === 0) return this.listParticipants(eventId);
+
+    // ② 選ばれた人を SPY にする
+    const { error: spyError } = await this.db
+      .from('participants')
+      .update({ role: 'SPY', updated_at: now })
+      .eq('event_id', eventId)
+      .in('id', spySet);
+    if (spyError) throw new Error(`setParticipantRoles(spy): ${spyError.message}`);
+
+    // ③ SPY MISSION の一覧と、いまの割り当てをまとめて取る
+    const [missions, assigned] = await Promise.all([
+      this.listMissions(eventId),
+      this.listSpyAssignments(eventId),
+    ]);
+    const spyMissionIds = new Set(missions.filter((m) => m.kind === 'SPY').map((m) => m.id));
+
+    // ④ SPYでなくなった人の割り当てを1回で落とす
+    const stale = assigned
+      .filter((a) => !spySet.includes(a.participantId) && spyMissionIds.has(a.missionId))
+      .map((a) => a.assignmentId);
+    if (stale.length > 0) {
+      const { error } = await this.db.from('participant_missions').delete().in('id', stale);
+      if (error) throw new Error(`setParticipantRoles(clear): ${error.message}`);
     }
+
+    // ⑤ SPYに足りていないSPY MISSIONを1回で配る
+    const rows: { participant_id: string; mission_id: string; order_index: number }[] = [];
+    for (const participantId of spySet) {
+      const already = new Set(
+        assigned.filter((a) => a.participantId === participantId).map((a) => a.missionId),
+      );
+      for (const pick of pickSpyMissions(missions)) {
+        if (already.has(pick.missionId)) continue;
+        rows.push({
+          participant_id: participantId,
+          mission_id: pick.missionId,
+          order_index: pick.orderIndex,
+        });
+      }
+    }
+    if (rows.length > 0) {
+      const { error } = await this.db.from('participant_missions').insert(rows);
+      if (error) throw new Error(`setParticipantRoles(assign): ${error.message}`);
+    }
+
     return this.listParticipants(eventId);
+  }
+
+  /** イベント内の割り当てを1回で取る（誰にどのMISSIONが配られているか） */
+  private async listSpyAssignments(
+    eventId: string,
+  ): Promise<{ assignmentId: string; participantId: string; missionId: string }[]> {
+    const { data, error } = await this.db
+      .from('participant_missions')
+      .select('id, participant_id, mission_id, participants!inner(event_id)')
+      .eq('participants.event_id', eventId);
+    if (error) throw new Error(`listSpyAssignments: ${error.message}`);
+    return (data ?? []).map((r) => ({
+      assignmentId: r.id as string,
+      participantId: r.participant_id as string,
+      missionId: r.mission_id as string,
+    }));
   }
 
   /* --------------- missions --------------- */
