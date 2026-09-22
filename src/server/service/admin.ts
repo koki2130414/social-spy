@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import QRCode from 'qrcode';
+import { runAfterResponse } from '@/server/after-response';
 import { cachedMissionProgress } from './progress-cache';
 import { computeFinalRanking, type FinalRankingRow } from '@/lib/core/final-score';
 import type {
@@ -133,11 +134,16 @@ async function requireEventAccess(
 ): Promise<{ session: AdminSession; event: SpyEvent }> {
   const session = await requireAdmin();
   const repo = getRepo();
-  const event = await repo.getEvent(eventId);
-  if (!event) throw new ServiceError('EVENT_NOT_FOUND', 'イベントが見つかりません。', 404);
 
+  // イベントの取得と権限の確認は互いに独立しているので同時に投げる。
+  // データベースが海外だと1往復が数百msかかるため、
+  // 直列にすると運営が押すボタンすべてがその分だけ遅くなる。
   // デモ／本番で同じ権限判定を通す（モードによる分岐を作らない）
-  const allowed = await repo.isEventAdmin(eventId, session.uid);
+  const [event, allowed] = await Promise.all([
+    repo.getEvent(eventId),
+    repo.isEventAdmin(eventId, session.uid),
+  ]);
+  if (!event) throw new ServiceError('EVENT_NOT_FOUND', 'イベントが見つかりません。', 404);
   if (!allowed) {
     throw new ServiceError('FORBIDDEN', 'このイベントを管理する権限がありません。', 403);
   }
@@ -335,13 +341,21 @@ export async function changePhase(eventId: string, to: GamePhase): Promise<SpyEv
 
   const notification = PHASE_NOTIFICATION[to];
   if (notification) {
+    // お知らせ自体は画面が読むので、ここで必ず書く
     await repo.createNotification({ eventId, ...notification });
-    await sendPushToEvent(eventId, {
-      title: notification.title,
-      body: notification.body,
-      url: PHASE_DEEP_LINK[to] ?? '/game',
-      tag: 'phase',
-    });
+
+    // プッシュ通知は人数ぶんの外部送信になる。運営のボタンを待たせないよう、
+    // 応答を返したあとに送る（after は Next.js が応答後に実行してくれる）。
+    runAfterResponse(
+      () =>
+        sendPushToEvent(eventId, {
+          title: notification.title,
+          body: notification.body,
+          url: PHASE_DEEP_LINK[to] ?? '/game',
+          tag: 'phase',
+        }),
+      'sendPushToEvent',
+    );
   }
   return updated;
 }
@@ -692,11 +706,16 @@ export async function createNotification(input: {
 }): Promise<SpyNotification> {
   await requireEventAccess(input.eventId);
   const notification = await getRepo().createNotification(input);
-  await sendPushToEvent(input.eventId, {
-    title: input.title,
-    body: input.body,
-    tag: 'notice',
-  });
+  // 通知の送信は人数ぶんの外部送信になる。送信ボタンを待たせない
+  runAfterResponse(
+    () =>
+      sendPushToEvent(input.eventId, {
+        title: input.title,
+        body: input.body,
+        tag: 'notice',
+      }),
+    'sendPushToEvent(notice)',
+  );
   return notification;
 }
 
