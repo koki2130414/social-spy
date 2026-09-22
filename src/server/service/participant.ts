@@ -1,9 +1,11 @@
 import type {
   AssignedMission,
   GameResult,
+  Participant,
   ParticipantGameState,
   PublicParticipant,
   RankingRow,
+  Vote,
 } from '@/lib/types';
 import {
   canRegister,
@@ -12,6 +14,7 @@ import {
   isSpyMissionPublic,
 } from '@/lib/core/phase';
 import { visibleSpyMissions } from '@/lib/core/intel';
+import { computeFinalRanking, type FinalRankingRow } from '@/lib/core/final-score';
 
 /** 役割の判定はここ1か所に寄せる（画面ごとに書き分けると取りこぼす） */
 function isSpy(participant: { role: string }): boolean {
@@ -198,10 +201,10 @@ export async function getGameState(): Promise<ParticipantGameState> {
   //  ・その場面で要らないものは引かない（SPY MISSIONの一覧は公開後だけ）
   const needsPublicSpyMissions = !isSpy(me) && isSpyMissionPublic(event.phase);
 
-  const [assigned, notifications, vote, participantCount, eventMissions] = await Promise.all([
+  const [assigned, notifications, myVotes, participantCount, eventMissions] = await Promise.all([
     repo.listAssignedMissions(me.id),
     repo.listNotifications(event.id),
-    repo.getVoteByVoter(event.id, me.id),
+    repo.listVotesByVoter(event.id, me.id),
     repo.countParticipants(event.id),
     needsPublicSpyMissions ? repo.listMissions(event.id) : Promise.resolve([]),
   ]);
@@ -231,9 +234,6 @@ export async function getGameState(): Promise<ParticipantGameState> {
     ownSpyMissions,
     publicSpyMissions,
   });
-
-  // 投票先の名前だけが要る。そのためだけに全員を取らず、その1人を引く
-  const votedTarget = vote ? await repo.getParticipant(vote.targetParticipantId) : null;
 
   const endsAt = event.activeStartedAt
     ? new Date(
@@ -265,9 +265,9 @@ export async function getGameState(): Promise<ParticipantGameState> {
     spyMissions,
     spyMissionsPublic: spyMissions !== null && !isSpy(me),
     notifications,
-    vote: votedTarget
-      ? { targetParticipantId: votedTarget.id, targetDisplayName: votedTarget.displayName }
-      : null,
+    // 名前はここで引かない。投票画面が持っている候補一覧から引ける。
+    // 毎回の更新で最大10人ぶんの名前を引くと、その通信が101台ぶん走る
+    votedTargetIds: myVotes.map((v) => v.targetParticipantId),
     participantCount,
   };
 }
@@ -337,39 +337,77 @@ export async function listVoteCandidates(): Promise<PublicParticipant[]> {
   return toPublicParticipants(participants.filter((p) => p.id !== session.pid && p.attending));
 }
 
-export async function castVote(targetId: string): Promise<{ targetDisplayName: string }> {
+/**
+ * SPYだと思う人を選んで送る（最大10人）。
+ *
+ * 1人1票ではなく複数選べるので、次の3つをサーバー側で必ず確かめる。
+ *  ・上限を超えていないこと（画面だけの制限にしない）
+ *  ・同じ人を二重に選んでいないこと
+ *  ・すでに送っていないこと（送信後の変更はできない）
+ * データベース側にも同じ制約とトリガを置いてある。
+ */
+export async function castVotes(
+  targetIds: readonly string[],
+): Promise<{ targetDisplayNames: string[] }> {
   const session = await requireSession();
   const repo = getRepo();
 
   const event = await repo.getEvent(session.eid);
   if (!event) throw new ServiceError('EVENT_NOT_FOUND', 'イベントが見つかりません。', 404);
 
-  const [existingVote, target, me] = await Promise.all([
-    repo.getVoteByVoter(event.id, session.pid),
-    repo.getParticipant(targetId),
+  // 同じ人を2回押しても1人ぶんとして扱う（画面の二度押し対策）
+  const unique = [...new Set(targetIds)];
+
+  const [existingVotes, me, ...targets] = await Promise.all([
+    repo.listVotesByVoter(event.id, session.pid),
     repo.getParticipant(session.pid),
+    ...unique.map((id) => repo.getParticipant(id)),
   ]);
+
+  const found = targets.filter((t): t is NonNullable<typeof t> => t !== null);
 
   const validation = validateVote({
     phase: event.phase,
     voterId: session.pid,
-    targetId,
+    targetIds: unique,
     eventId: event.id,
-    existingVote,
-    target: target ? { id: target.id, eventId: target.eventId, attending: target.attending } : null,
+    existingVote: existingVotes[0] ?? null,
+    targets: found.map((t) => ({ id: t.id, eventId: t.eventId, attending: t.attending })),
     voterAttending: me?.attending ?? false,
   });
   if (!validation.ok) {
     throw new ServiceError(validation.reason, VOTE_REJECTION_MESSAGE[validation.reason], 403);
   }
 
-  await repo.insertVote(event.id, session.pid, targetId);
-  return { targetDisplayName: target!.displayName };
+  await repo.insertVotes(event.id, session.pid, unique);
+  return { targetDisplayNames: found.map((t) => t.displayName) };
+}
+
+export interface MyPick {
+  participantId: string;
+  displayName: string;
+  /** 本当にSPYだったか */
+  correct: boolean;
+}
+
+export interface SpyCatcher {
+  participantId: string;
+  displayName: string;
+  affiliation: string | null;
+  /** 当てたSPYの人数 */
+  correctSpies: number;
 }
 
 export interface ParticipantResult extends GameResult {
-  myVote: { targetParticipantId: string; targetDisplayName: string } | null;
-  myVoteCorrect: boolean | null;
+  /** 自分が選んだ人と、その当たり外れ */
+  myPicks: MyPick[];
+  myCorrectSpies: number;
+  /** SPYを1人以上当てた人（当てた数の多い順）。正体公開後だけ出す */
+  catchers: SpyCatcher[];
+  /** クエスト達成率とSPY正解を合わせた総合順位 */
+  finalRanking: FinalRankingRow[];
+  /** 自分の総合順位 */
+  myFinalRow: FinalRankingRow | null;
 }
 
 export async function getResultForParticipant(): Promise<ParticipantResult> {
@@ -381,21 +419,67 @@ export async function getResultForParticipant(): Promise<ParticipantResult> {
     throw new ServiceError('NOT_REVEALED', 'まだ正体は公開されていません。', 403);
   }
 
-  const [participants, votes, myVote] = await Promise.all([
+  const [participants, votes, ranking] = await Promise.all([
     repo.listParticipants(event.id),
     repo.listVotes(event.id),
-    repo.getVoteByVoter(event.id, session.pid),
+    buildRanking(event.id, event.phase),
   ]);
 
   const result = computeResults(participants, votes);
-  const target = myVote ? participants.find((p) => p.id === myVote.targetParticipantId) : null;
+  const finalRanking = computeFinalRanking(ranking, participants, votes);
 
   return {
     ...result,
-    myVote: target
-      ? { targetParticipantId: target.id, targetDisplayName: target.displayName }
-      : null,
-    myVoteCorrect: target ? target.role === 'SPY' : null,
+    ...myPicksAndCatchers(participants, votes, session.pid, finalRanking),
+    finalRanking,
+    myFinalRow: finalRanking.find((r) => r.participantId === session.pid) ?? null,
+  };
+}
+
+/**
+ * 自分が選んだ人の当たり外れと、SPYを当てた人の一覧。
+ *
+ * 外した人が誰に投票したかは出さない。
+ * 「誰が誰を疑ったか」は当日の空気を悪くしうるので、
+ * 出すのは当てた人と、その当てた数だけにする。
+ */
+function myPicksAndCatchers(
+  participants: readonly Participant[],
+  votes: readonly Vote[],
+  myId: string,
+  finalRanking: readonly FinalRankingRow[],
+): { myPicks: MyPick[]; myCorrectSpies: number; catchers: SpyCatcher[] } {
+  const byId = new Map(participants.map((p) => [p.id, p]));
+  const spyIds = new Set(
+    participants.filter((p) => p.role === 'SPY' && p.attending).map((p) => p.id),
+  );
+
+  const myPicks: MyPick[] = votes
+    .filter((v) => v.voterParticipantId === myId)
+    .map((v) => byId.get(v.targetParticipantId))
+    .filter((p): p is Participant => Boolean(p))
+    .map((p) => ({
+      participantId: p.id,
+      displayName: p.displayName,
+      correct: spyIds.has(p.id),
+    }));
+
+  const catchers: SpyCatcher[] = finalRanking
+    .filter((r) => r.correctSpies > 0)
+    .map((r) => ({
+      participantId: r.participantId,
+      displayName: r.displayName,
+      affiliation: r.affiliation,
+      correctSpies: r.correctSpies,
+    }))
+    .sort(
+      (a, b) => b.correctSpies - a.correctSpies || a.displayName.localeCompare(b.displayName, 'ja'),
+    );
+
+  return {
+    myPicks,
+    myCorrectSpies: myPicks.filter((p) => p.correct).length,
+    catchers,
   };
 }
 

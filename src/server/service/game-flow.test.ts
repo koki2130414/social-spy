@@ -25,7 +25,7 @@ import {
   DEMO_SPY_PARTICIPANT_ID,
 } from '@/server/demo/seed';
 import {
-  castVote,
+  castVotes,
   getGameState,
   getResultForParticipant,
   joinEvent,
@@ -207,7 +207,7 @@ describe('FINAL VOTE', () => {
   it('自分自身へは投票できない', async () => {
     await advanceTo('VOTING');
     await asAgent();
-    await expect(castVote(DEMO_AGENT_PARTICIPANT_ID)).rejects.toMatchObject({
+    await expect(castVotes([DEMO_AGENT_PARTICIPANT_ID])).rejects.toMatchObject({
       code: 'SELF_VOTE_FORBIDDEN',
     });
   });
@@ -216,28 +216,28 @@ describe('FINAL VOTE', () => {
     await advanceTo('VOTING');
     await asAgent();
 
-    await castVote(DEMO_SPY_PARTICIPANT_ID);
+    await castVotes([DEMO_SPY_PARTICIPANT_ID]);
     const state = await getGameState();
-    expect(state.vote?.targetParticipantId).toBe(DEMO_SPY_PARTICIPANT_ID);
+    expect(state.votedTargetIds).toEqual([DEMO_SPY_PARTICIPANT_ID]);
 
     // 同じ相手への再投票
-    await expect(castVote(DEMO_SPY_PARTICIPANT_ID)).rejects.toMatchObject({
+    await expect(castVotes([DEMO_SPY_PARTICIPANT_ID])).rejects.toMatchObject({
       code: 'ALREADY_VOTED',
     });
     // 別の相手への投票（＝変更）
     const others = await listVoteCandidates();
     const another = others.find((c) => c.id !== DEMO_SPY_PARTICIPANT_ID)!;
-    await expect(castVote(another.id)).rejects.toMatchObject({ code: 'ALREADY_VOTED' });
+    await expect(castVotes([another.id])).rejects.toMatchObject({ code: 'ALREADY_VOTED' });
 
     // 投票内容は変わっていない
     const after = await getGameState();
-    expect(after.vote?.targetParticipantId).toBe(DEMO_SPY_PARTICIPANT_ID);
+    expect(after.votedTargetIds).toEqual([DEMO_SPY_PARTICIPANT_ID]);
   });
 
   it('投票フェーズ外では投票できない', async () => {
     await advanceTo('ACTIVE');
     await asAgent();
-    await expect(castVote(DEMO_SPY_PARTICIPANT_ID)).rejects.toMatchObject({
+    await expect(castVotes([DEMO_SPY_PARTICIPANT_ID])).rejects.toMatchObject({
       code: 'PHASE_NOT_VOTING',
     });
   });
@@ -245,7 +245,7 @@ describe('FINAL VOTE', () => {
   it('未認証では投票できない', async () => {
     await advanceTo('VOTING');
     cookieJar.clear();
-    await expect(castVote(DEMO_SPY_PARTICIPANT_ID)).rejects.toMatchObject({
+    await expect(castVotes([DEMO_SPY_PARTICIPANT_ID])).rejects.toMatchObject({
       code: 'NOT_AUTHENTICATED',
     });
   });
@@ -666,7 +666,7 @@ describe('IDENTITY REVEAL', () => {
   it('複数SPYの正体を表示できる', async () => {
     await advanceTo('VOTING');
     await asAgent();
-    await castVote(DEMO_SPY_PARTICIPANT_ID);
+    await castVotes([DEMO_SPY_PARTICIPANT_ID]);
 
     await loginAdmin();
     await changePhase(DEMO_EVENT_ID, 'IDENTITY_REVEALED');
@@ -675,8 +675,8 @@ describe('IDENTITY REVEAL', () => {
     const result = await getResultForParticipant();
     expect(result.spies).toHaveLength(2);
     expect(result.spies.map((s) => s.displayName)).toContain('鈴木 玲奈');
-    expect(result.myVote?.targetParticipantId).toBe(DEMO_SPY_PARTICIPANT_ID);
-    expect(result.myVoteCorrect).toBe(true);
+    expect(result.myPicks.map((p) => p.participantId)).toEqual([DEMO_SPY_PARTICIPANT_ID]);
+    expect(result.myCorrectSpies).toBe(1);
     expect(result.rows.length).toBeGreaterThan(0);
   });
 

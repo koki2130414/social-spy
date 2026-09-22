@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import QRCode from 'qrcode';
 import { cachedMissionProgress } from './progress-cache';
+import { computeFinalRanking, type FinalRankingRow } from '@/lib/core/final-score';
 import type {
   GamePhase,
   GameResult,
@@ -635,17 +636,23 @@ export async function createNotification(input: {
 
 export interface AdminResult extends GameResult {
   notVoted: { id: string; displayName: string }[];
+  /** 1人でも選んだ人の数（票数ではなく人数） */
   votedCount: number;
+  /** 投じられた票の総数 */
+  ballotCount: number;
   identityRevealed: boolean;
   ballots: { voter: string; target: string; targetIsSpy: boolean }[];
+  /** クエスト達成率とSPY正解を合わせた総合順位（表彰で読み上げる用） */
+  finalRanking: FinalRankingRow[];
 }
 
 export async function getAdminResult(eventId: string): Promise<AdminResult> {
   const { event } = await requireEventAccess(eventId);
   const repo = getRepo();
-  const [participants, votes] = await Promise.all([
+  const [participants, votes, ranking] = await Promise.all([
     repo.listParticipants(eventId),
     repo.listVotes(eventId),
+    buildRanking(eventId, event.phase),
   ]);
   const result = computeResults(participants, votes);
   const voterIds = new Set(votes.map((v) => v.voterParticipantId));
@@ -657,13 +664,16 @@ export async function getAdminResult(eventId: string): Promise<AdminResult> {
     notVoted: participants
       .filter((p) => !voterIds.has(p.id))
       .map((p) => ({ id: p.id, displayName: p.displayName })),
-    votedCount: votes.length,
+    // 1人が複数選べるので、人数と票数は別物になる
+    votedCount: voterIds.size,
+    ballotCount: votes.length,
     identityRevealed: event.phase === 'IDENTITY_REVEALED' || event.phase === 'FINISHED',
     ballots: votes.map((v) => ({
       voter: nameById.get(v.voterParticipantId) ?? '(不明)',
       target: nameById.get(v.targetParticipantId) ?? '(不明)',
       targetIsSpy: spyIds.has(v.targetParticipantId),
     })),
+    finalRanking: computeFinalRanking(ranking, participants, votes),
   };
 }
 
