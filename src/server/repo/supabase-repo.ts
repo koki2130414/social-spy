@@ -492,14 +492,18 @@ export class SupabaseRepo implements Repo {
       if (error) throw new Error(`setParticipantRoles(clear): ${error.message}`);
     }
 
-    // ⑤ SPYに足りていないSPY MISSIONを1回で配る
+    // ⑤ SPY MISSIONをまだ持っていないSPYにだけ配る。
+    //
+    // すでに配られている人には足さない。SPY MISSIONは毎回くじ引きなので、
+    // 選び直しのたびに足していくと、同じ人が3件→6件→9件と増えてしまい、
+    // その人の達成率だけが下がる（＝正体がばれる）。
     const rows: { participant_id: string; mission_id: string; order_index: number }[] = [];
     for (const participantId of spySet) {
-      const already = new Set(
-        assigned.filter((a) => a.participantId === participantId).map((a) => a.missionId),
+      const hasSpyMission = assigned.some(
+        (a) => a.participantId === participantId && spyMissionIds.has(a.missionId),
       );
+      if (hasSpyMission) continue;
       for (const pick of pickSpyMissions(missions)) {
-        if (already.has(pick.missionId)) continue;
         rows.push({
           participant_id: participantId,
           mission_id: pick.missionId,
@@ -677,6 +681,9 @@ export class SupabaseRepo implements Repo {
     if (!participant) throw new Error('PARTICIPANT_NOT_FOUND');
     const missions = await this.listMissions(participant.eventId);
     const existing = await this.listAssignedMissions(participantId);
+    // すでにSPY MISSIONを持っている人には足さない（くじを引き直すと件数が増えてしまう）
+    const existingSpy = existing.filter((m) => m.kind === 'SPY');
+    if (existingSpy.length > 0) return existingSpy;
     const existingIds = new Set(existing.map((m) => m.missionId));
     const picks = pickSpyMissions(missions).filter((p) => !existingIds.has(p.missionId));
     if (picks.length > 0) {
