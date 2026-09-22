@@ -41,6 +41,8 @@ export interface SpyEvent {
   phaseChangedAt: string;
   /** OPERATION START を押した時刻。残り時間計算の基準 */
   activeStartedAt: string | null;
+  /** しまってある日時。null なら現役のイベント */
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
