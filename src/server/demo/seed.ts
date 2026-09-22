@@ -83,6 +83,7 @@ export function buildDemoDataset(): DemoDataset {
     phase: 'LOBBY',
     phaseChangedAt: iso(-30),
     activeStartedAt: null,
+    archivedAt: null,
     createdAt: iso(-1440),
     updatedAt: iso(-30),
   };
