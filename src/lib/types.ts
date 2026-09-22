@@ -184,7 +184,8 @@ export interface ParticipantGameState {
   spyMissions: AssignedMission[] | null;
   spyMissionsPublic: boolean;
   notifications: SpyNotification[];
-  vote: { targetParticipantId: string; targetDisplayName: string } | null;
+  /** 自分が選んだ相手のID。空なら未投票（名前は投票画面で引く） */
+  votedTargetIds: string[];
   participantCount: number;
 }
 
@@ -236,5 +237,8 @@ export interface GameResult {
   rows: VoteResultRow[];
   totalVotes: number;
   totalParticipants: number;
+  /** SPYを1人以上当てた「人数」 */
   correctVoters: number;
+  /** SPYに当たった「票数」（1人が複数選べるため人数とは別） */
+  correctBallots: number;
 }

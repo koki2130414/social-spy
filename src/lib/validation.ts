@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_VOTE_TARGETS } from '@/lib/core/vote';
 import { GAME_PHASES, MISSION_DIFFICULTIES } from '@/lib/types';
 
 export const joinSchema = z.object({
@@ -46,7 +47,11 @@ export const missionCompleteSchema = z.object({
 });
 
 export const voteSchema = z.object({
-  targetId: z.string().min(1, '投票先を選択してください。'),
+  // SPYだと思う人を複数選べる。上限はサーバーとデータベースでも守る
+  targetIds: z
+    .array(z.string().min(1))
+    .min(1, 'SPYだと思う人を1人以上選んでください。')
+    .max(MAX_VOTE_TARGETS, `選べるのは${MAX_VOTE_TARGETS}人までです。`),
 });
 
 export const adminLoginSchema = z.object({
