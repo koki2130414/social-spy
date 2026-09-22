@@ -58,6 +58,11 @@ export interface Repo {
   getEventByCode(code: string): Promise<SpyEvent | null>;
   createEvent(input: EventInput): Promise<SpyEvent>;
   updateEvent(id: string, input: Partial<EventInput>): Promise<SpyEvent>;
+  /** しまう・戻す（記録は消さない） */
+  setEventArchived(id: string, archived: boolean): Promise<SpyEvent>;
+  /** 完全に消す。投票があるイベントには使わない（votesの削除禁止に当たる） */
+  deleteEvent(id: string): Promise<void>;
+  countVotes(eventId: string): Promise<number>;
   setPhase(eventId: string, to: GamePhase, changedBy: string | null): Promise<SpyEvent>;
   listPhaseHistory(eventId: string): Promise<PhaseHistoryEntry[]>;
 

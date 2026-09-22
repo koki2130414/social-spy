@@ -37,6 +37,8 @@ function mapEvent(r: Row): SpyEvent {
     phase: r.phase as GamePhase,
     phaseChangedAt: r.phase_changed_at,
     activeStartedAt: r.active_started_at,
+    // 列がまだ無いデータベースでも動くようにしておく（移行の前後で画面が落ちない）
+    archivedAt: (r.archived_at as string | null) ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -133,6 +135,39 @@ export class SupabaseRepo implements Repo {
       .select('*')
       .order('starts_at', { ascending: false });
     return unwrap(data, error, 'listEvents').map(mapEvent);
+  }
+
+  /** しまう・戻す。記録は消さない */
+  async setEventArchived(id: string, archived: boolean): Promise<SpyEvent> {
+    const { data, error } = await this.db
+      .from('events')
+      .update({ archived_at: archived ? new Date().toISOString() : null })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) throw new Error(`setEventArchived: ${error.message}`);
+    return mapEvent(data);
+  }
+
+  /**
+   * イベントを完全に消す。
+   *
+   * 参加者・MISSION の割り当てなどは外部キーの連鎖で一緒に消えるが、
+   * votes には削除禁止のトリガがあるため、投票があるイベントは消せない
+   * （途中まで消えて失敗する）。呼び出し側で投票の有無を先に確かめること。
+   */
+  async deleteEvent(id: string): Promise<void> {
+    const { error } = await this.db.from('events').delete().eq('id', id);
+    if (error) throw new Error(`deleteEvent: ${error.message}`);
+  }
+
+  async countVotes(eventId: string): Promise<number> {
+    const { count, error } = await this.db
+      .from('votes')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', eventId);
+    if (error) throw new Error(`countVotes: ${error.message}`);
+    return count ?? 0;
   }
 
   async getEvent(id: string): Promise<SpyEvent | null> {

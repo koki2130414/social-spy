@@ -123,6 +123,7 @@ export class DemoRepo implements Repo {
       phase: 'LOBBY',
       phaseChangedAt: now(),
       activeStartedAt: null,
+      archivedAt: null,
       createdAt: now(),
       updatedAt: now(),
     };
@@ -136,6 +137,33 @@ export class DemoRepo implements Repo {
       changedAt: now(),
     });
     return event;
+  }
+
+  async setEventArchived(id: string, archived: boolean): Promise<SpyEvent> {
+    const event = state().events.find((e) => e.id === id);
+    if (!event) throw new Error('EVENT_NOT_FOUND');
+    event.archivedAt = archived ? now() : null;
+    event.updatedAt = now();
+    return event;
+  }
+
+  /** 本番の外部キーの連鎖に合わせて、ぶら下がっている記録も一緒に消す */
+  async deleteEvent(id: string): Promise<void> {
+    const s = state();
+    const participantIds = new Set(s.participants.filter((p) => p.eventId === id).map((p) => p.id));
+    s.events = s.events.filter((e) => e.id !== id);
+    s.participants = s.participants.filter((p) => p.eventId !== id);
+    s.votes = s.votes.filter((v) => v.eventId !== id);
+    s.notifications = s.notifications.filter((n) => n.eventId !== id);
+    s.phaseHistory = s.phaseHistory.filter((h) => h.eventId !== id);
+    s.participantMissions = s.participantMissions.filter(
+      (pm) => !participantIds.has(pm.participantId),
+    );
+    s.missions = s.missions.filter((m) => m.eventId !== id);
+  }
+
+  async countVotes(eventId: string): Promise<number> {
+    return state().votes.filter((v) => v.eventId === eventId).length;
   }
 
   async updateEvent(id: string, input: Partial<EventInput>): Promise<SpyEvent> {
