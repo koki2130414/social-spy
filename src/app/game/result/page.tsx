@@ -9,10 +9,19 @@ import { apiGet, ApiError } from '@/lib/api';
 import { useRanking } from '@/hooks/use-ranking';
 import { isIdentityRevealed } from '@/lib/core/phase';
 import type { GameResult } from '@/lib/types';
+import type { FinalRankingRow } from '@/lib/core/final-score';
 
 interface ParticipantResult extends GameResult {
-  myVote: { targetParticipantId: string; targetDisplayName: string } | null;
-  myVoteCorrect: boolean | null;
+  myPicks: { participantId: string; displayName: string; correct: boolean }[];
+  myCorrectSpies: number;
+  catchers: {
+    participantId: string;
+    displayName: string;
+    affiliation: string | null;
+    correctSpies: number;
+  }[];
+  finalRanking: FinalRankingRow[];
+  myFinalRow: FinalRankingRow | null;
 }
 
 export default function ResultPage() {
@@ -94,35 +103,124 @@ export default function ResultPage() {
         ) : null}
       </ul>
 
-      {/* 自分の投票 */}
+      {/* 自分が選んだ人と、その当たり外れ */}
       <section className="rounded-sm border border-border bg-card p-5">
         <p className="label-mono">YOUR VOTE</p>
-        {result.myVote ? (
+        {result.myPicks.length > 0 ? (
           <>
-            <p className="headline-mono mt-2 text-lg text-foreground">
-              {result.myVote.targetDisplayName}
+            <p className="mt-2 text-sm text-muted-foreground">
+              あなたが選んだ {result.myPicks.length} 人のうち{' '}
+              <span className="font-mono text-base text-intel">{result.myCorrectSpies}</span>{' '}
+              人がSPYでした。
             </p>
-            <p
-              className={`mt-3 flex items-center gap-2 text-sm ${
-                result.myVoteCorrect ? 'text-intel' : 'text-muted-foreground'
-              }`}
-            >
-              {result.myVoteCorrect ? (
-                <>
-                  <Trophy className="h-4 w-4" aria-hidden /> 正解。SPYを見抜きました。
-                </>
-              ) : (
-                <>
-                  <XCircle className="h-4 w-4" aria-hidden /> 残念。SPYではありませんでした。
-                </>
-              )}
-            </p>
+            <ul className="mt-3 space-y-2">
+              {result.myPicks.map((pick) => (
+                <li
+                  key={pick.participantId}
+                  className="flex items-center justify-between gap-2 rounded-sm border border-border p-3"
+                >
+                  <span className="min-w-0 truncate text-sm text-foreground">
+                    {pick.displayName}
+                  </span>
+                  {pick.correct ? (
+                    <span className="flex shrink-0 items-center gap-1 text-sm text-intel">
+                      <Trophy className="h-4 w-4" aria-hidden /> 正解
+                    </span>
+                  ) : (
+                    <span className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
+                      <XCircle className="h-4 w-4" aria-hidden /> はずれ
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
           </>
         ) : (
           <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
             <ShieldX className="h-4 w-4" aria-hidden /> 投票していません。
           </p>
         )}
+      </section>
+
+      {/* SPYを当てた人 */}
+      <section>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <p className="label-mono">SPY CATCHERS</p>
+          <Badge variant="intel">{result.catchers.length}人</Badge>
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          SPYを当てた人です。外した人が誰を選んだかは出していません。
+        </p>
+        <ul className="space-y-2">
+          {result.catchers.map((c) => (
+            <li
+              key={c.participantId}
+              className={`flex items-center gap-3 rounded-sm border border-border p-3 ${
+                c.participantId === state.me.id ? 'bg-intel/10' : 'bg-card'
+              }`}
+            >
+              <Trophy className="h-4 w-4 shrink-0 text-amber" aria-hidden />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-foreground">{c.displayName}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {c.affiliation ?? '所属未登録'}
+                </span>
+              </span>
+              <span className="shrink-0 font-mono text-sm tabular-nums text-intel">
+                {c.correctSpies}人的中
+              </span>
+            </li>
+          ))}
+          {result.catchers.length === 0 ? (
+            <li className="rounded-sm border border-dashed border-border p-4 text-sm text-muted-foreground">
+              SPYを当てた人はいませんでした。SPYの勝ちです。
+            </li>
+          ) : null}
+        </ul>
+      </section>
+
+      {/* 総合順位（クエスト達成率＋SPY正解） */}
+      <section>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <p className="label-mono">FINAL RANKING</p>
+          {result.myFinalRow ? (
+            <Badge variant="intel">
+              あなた {result.myFinalRow.rank}位／{result.finalRanking.length}人中（
+              {result.myFinalRow.points.toFixed(2)}pt）
+            </Badge>
+          ) : null}
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          クエスト達成率100%で1.00pt、SPYを1人当てるごとに1.00ptです。
+        </p>
+        <ul className="space-y-2">
+          {result.finalRanking.slice(0, 10).map((row) => (
+            <li
+              key={row.participantId}
+              className={`flex items-center gap-3 rounded-sm border border-border p-3 ${
+                row.participantId === state.me.id ? 'bg-intel/10' : 'bg-card'
+              }`}
+            >
+              <span className="w-7 shrink-0 text-right font-mono text-base font-bold tabular-nums text-amber">
+                {row.rank}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-foreground">{row.displayName}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  達成率 {row.percent}% ／ SPY {row.correctSpies}人的中
+                </span>
+              </span>
+              <span className="shrink-0 font-mono text-base tabular-nums text-intel">
+                {row.points.toFixed(2)}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {result.finalRanking.length > 10 && result.myFinalRow && result.myFinalRow.rank > 10 ? (
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            …あなたは {result.myFinalRow.rank} 位（{result.myFinalRow.points.toFixed(2)}pt）
+          </p>
+        ) : null}
       </section>
 
       {/* クエストの達成率。投票とは別の表彰 */}
@@ -176,7 +274,7 @@ export default function ResultPage() {
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <p className="label-mono">FINAL TALLY</p>
           <Badge variant="outline">投票 {result.totalVotes}票</Badge>
-          <Badge variant="intel">的中 {result.correctVoters}人</Badge>
+          <Badge variant="intel">SPYを当てた人 {result.correctVoters}人</Badge>
         </div>
         <ul className="space-y-2">
           {result.rows.map((row) => (
