@@ -86,7 +86,7 @@ function nextNumber(rows: readonly { loginId: string | null }[]): string {
 }
 
 export default function AdminParticipantsPage() {
-  const { eventId, event } = useAdmin();
+  const { eventId, event, reloadEvents } = useAdmin();
   const { data, loading, error, refresh } = useAdminResource<{ participants: Row[] }>(
     eventId ? `/api/admin/events/${eventId}/participants` : null,
     6000,
@@ -98,6 +98,14 @@ export default function AdminParticipantsPage() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmAuto, setConfirmAuto] = useState(false);
+  /**
+   * 自動選出で何人SPYにするか。
+   *
+   * 当日その場で「思ったより人が少ない／多い」と分かることがあるので、
+   * イベント設定を開き直さなくても、ここで直して選び直せるようにしている。
+   * 入力中は空にもできるよう、数値ではなく文字列で持つ。
+   */
+  const [spyCountInput, setSpyCountInput] = useState('');
   const [detail, setDetail] = useState<Row | null>(null);
   // 欠席にする操作は押し間違いが怖いので、名前を見せて確認してから実行する
   const [confirmAbsent, setConfirmAbsent] = useState<Row | null>(null);
@@ -170,17 +178,36 @@ export default function AdminParticipantsPage() {
     return <p className="text-sm text-muted-foreground">イベントを選択してください。</p>;
   }
 
+  /** 確認ダイアログを開く。人数の初期値はイベントの設定から入れておく */
+  const openAutoAssign = () => {
+    setSpyCountInput(String(event?.spyCount ?? 0));
+    setConfirmAuto(true);
+  };
+
+  const requestedSpyCount = Number(spyCountInput);
+  const spyCountValid =
+    spyCountInput.trim() !== '' &&
+    Number.isInteger(requestedSpyCount) &&
+    requestedSpyCount >= 0 &&
+    requestedSpyCount <= Math.min(20, presentCount);
+
   const autoAssign = async () => {
+    if (!spyCountValid) return;
     setBusy(true);
     setActionError(null);
     try {
-      await apiSend(`/api/admin/events/${eventId}/spies`, { mode: 'auto' });
-      await refresh();
+      await apiSend(`/api/admin/events/${eventId}/spies`, {
+        mode: 'auto',
+        count: requestedSpyCount,
+      });
+      // イベントも読み直す。人数の設定を書き換えているので、
+      // ここを忘れるとボタンに出る人数が古いままになる
+      await Promise.all([refresh(), reloadEvents()]);
+      setConfirmAuto(false);
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'SPYを選出できませんでした。');
     } finally {
       setBusy(false);
-      setConfirmAuto(false);
     }
   };
 
@@ -372,7 +399,7 @@ export default function AdminParticipantsPage() {
             )}
             {zipBusy ? '作成中…' : 'CSV＋QRをZIPで保存'}
           </Button>
-          <Button variant="outline" disabled={busy} onClick={() => setConfirmAuto(true)}>
+          <Button variant="outline" disabled={busy} onClick={openAutoAssign}>
             <Shuffle className="h-4 w-4" aria-hidden />
             SPYを自動選出（{event?.spyCount ?? 0}名）
           </Button>
@@ -751,10 +778,39 @@ export default function AdminParticipantsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>SPYを自動選出しますか？</AlertDialogTitle>
             <AlertDialogDescription>
-              現在の役割はすべてリセットされ、{event?.spyCount ?? 0}
-              名がランダムにSPYへ設定されます。
+              出席している{presentCount}名の中から、下の人数だけランダムにSPYを決めます。
+              今の役割はいったんすべて戻ります。欠席の人は選ばれません。
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          <div className="space-y-2 py-2">
+            <Label htmlFor="spyCountInput">SPYの人数</Label>
+            <Input
+              id="spyCountInput"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={Math.min(20, presentCount)}
+              value={spyCountInput}
+              onChange={(e) => setSpyCountInput(e.target.value)}
+              disabled={busy}
+              className="w-28"
+            />
+            <p className="text-xs text-muted-foreground">
+              0〜{Math.min(20, presentCount)}名まで。ここで変えると、イベントの設定にも残ります。
+            </p>
+            {!spyCountValid && spyCountInput.trim() !== '' ? (
+              <p role="alert" className="text-xs text-primary">
+                0〜{Math.min(20, presentCount)}の整数で入力してください。
+              </p>
+            ) : null}
+            {actionError ? (
+              <p role="alert" className="text-xs text-primary">
+                {actionError}
+              </p>
+            ) : null}
+          </div>
+
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>キャンセル</AlertDialogCancel>
             <AlertDialogAction
@@ -762,9 +818,9 @@ export default function AdminParticipantsPage() {
                 e.preventDefault();
                 void autoAssign();
               }}
-              disabled={busy}
+              disabled={busy || !spyCountValid}
             >
-              選出する
+              {spyCountValid ? `${requestedSpyCount}名を選出する` : '選出する'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
