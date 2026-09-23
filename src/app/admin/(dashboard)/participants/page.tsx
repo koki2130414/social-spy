@@ -107,6 +107,9 @@ export default function AdminParticipantsPage() {
    */
   const [spyCountInput, setSpyCountInput] = useState('');
   const [detail, setDetail] = useState<Row | null>(null);
+  // 表示名の変更（詳細ダイアログの中）
+  const [renameInput, setRenameInput] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
   // 欠席にする操作は押し間違いが怖いので、名前を見せて確認してから実行する
   const [confirmAbsent, setConfirmAbsent] = useState<Row | null>(null);
   /**
@@ -190,6 +193,35 @@ export default function AdminParticipantsPage() {
     Number.isInteger(requestedSpyCount) &&
     requestedSpyCount >= 0 &&
     requestedSpyCount <= Math.min(20, presentCount);
+
+  /** 詳細を開く。表示名の入力欄には今の名前を入れておく */
+  const openDetail = (row: Row) => {
+    setRenameInput(row.displayName);
+    setRenameError(null);
+    setDetail(row);
+  };
+
+  /** 表示名を変える。QRとパスワードは変わらない */
+  const rename = async () => {
+    if (!detail) return;
+    const next = renameInput.trim();
+    if (!next || next === detail.displayName) return;
+    setBusy(true);
+    setRenameError(null);
+    try {
+      await apiSend(
+        `/api/admin/events/${eventId}/participants/${detail.id}/name`,
+        { displayName: next },
+        'PATCH',
+      );
+      await refresh();
+      setDetail({ ...detail, displayName: next });
+    } catch (e) {
+      setRenameError(e instanceof ApiError ? e.message : '表示名を変更できませんでした。');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const autoAssign = async () => {
     if (!spyCountValid) return;
@@ -745,7 +777,7 @@ export default function AdminParticipantsPage() {
                           参加に戻す
                         </Button>
                       )}
-                      <Button size="sm" variant="outline" onClick={() => setDetail(p)}>
+                      <Button size="sm" variant="outline" onClick={() => openDetail(p)}>
                         詳細
                       </Button>
                       <Button
@@ -936,6 +968,36 @@ export default function AdminParticipantsPage() {
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          {/* 受付での聞き間違い直しや、SNSでの名前にそろえたいときに使う */}
+          <div className="space-y-2 border-t border-border pt-4">
+            <Label htmlFor="renameInput">表示名を変える</Label>
+            <div className="flex gap-2">
+              <Input
+                id="renameInput"
+                value={renameInput}
+                onChange={(e) => setRenameInput(e.target.value)}
+                maxLength={24}
+                disabled={busy}
+              />
+              <Button
+                variant="outline"
+                onClick={() => void rename()}
+                disabled={busy || !renameInput.trim() || renameInput.trim() === detail?.displayName}
+              >
+                変更
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              24文字まで。配ったQRカードとパスワードはそのまま使えます（名前だけ変わります）。
+            </p>
+            {renameError ? (
+              <p role="alert" className="text-xs text-primary">
+                {renameError}
+              </p>
+            ) : null}
+          </div>
+
           <AlertDialogFooter>
             <AlertDialogCancel>閉じる</AlertDialogCancel>
           </AlertDialogFooter>
