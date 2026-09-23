@@ -63,9 +63,15 @@ export function phaseIndex(phase: GamePhase): number {
   return PHASE_ORDER.indexOf(phase);
 }
 
-/** 参加者登録を受け付けられるフェーズか */
+/**
+ * 参加者登録を受け付けられるフェーズか。
+ *
+ * 遅れて来た人を受付で断らないよう、ゲームが進んでいる間は受け入れる。
+ * SPY MISSION公開後に入った人はSPYにはならず、一般MISSIONだけを受け取る。
+ * 投票が始まったあとは、誰に投票したかの集計が動き出すので締め切る。
+ */
 export function canRegister(phase: GamePhase): boolean {
-  return phase === 'LOBBY' || phase === 'ACTIVE';
+  return phase === 'LOBBY' || phase === 'ACTIVE' || phase === 'SPY_MISSION_REVEALED';
 }
 
 /** MISSION の達成状態を更新できるフェーズか */

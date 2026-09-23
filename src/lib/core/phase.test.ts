@@ -49,10 +49,15 @@ describe('ゲームフェーズ', () => {
     expect(isIdentityRevealed('FINISHED')).toBe(true);
   });
 
-  it('参加登録は LOBBY / ACTIVE のみ', () => {
+  it('遅れて来た人も、投票が始まるまでは受付できる', () => {
     expect(canRegister('LOBBY')).toBe(true);
     expect(canRegister('ACTIVE')).toBe(true);
+    // 開始45分後のSPY MISSION公開で締め切ると、遅れて来た人が入れなくなる
+    expect(canRegister('SPY_MISSION_REVEALED')).toBe(true);
+    // 投票が始まったら締め切る（集計が動き出すため）
     expect(canRegister('VOTING')).toBe(false);
+    expect(canRegister('IDENTITY_REVEALED')).toBe(false);
+    expect(canRegister('FINISHED')).toBe(false);
   });
 
   it('フェーズは1段階ずつしか進めず、巻き戻せない', () => {
