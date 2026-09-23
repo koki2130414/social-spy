@@ -705,7 +705,12 @@ export async function createNotification(input: {
   kind: NotificationKind;
 }): Promise<SpyNotification> {
   await requireEventAccess(input.eventId);
-  const notification = await getRepo().createNotification(input);
+  const repo = getRepo();
+  const notification = await repo.createNotification(input);
+  // 参加者の端末は events の変化を合図に画面を更新する。
+  // お知らせも同じ合図に乗せることで、購読を1本に保つ
+  // （購読が2本あると、フェーズ変更のたびに会場へ飛ぶ通数が倍になる）。
+  await repo.touchEvent(input.eventId);
   // 通知の送信は人数ぶんの外部送信になる。送信ボタンを待たせない
   runAfterResponse(
     () =>
