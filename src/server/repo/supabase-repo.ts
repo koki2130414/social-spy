@@ -256,6 +256,10 @@ export class SupabaseRepo implements Repo {
     return event;
   }
 
+  async touchEvent(eventId: string): Promise<void> {
+    await this.db.from('events').update({ updated_at: new Date().toISOString() }).eq('id', eventId);
+  }
+
   async listPhaseHistory(eventId: string): Promise<PhaseHistoryEntry[]> {
     const { data, error } = await this.db
       .from('event_phase_history')

@@ -64,6 +64,14 @@ export interface Repo {
   deleteEvent(id: string): Promise<void>;
   countVotes(eventId: string): Promise<number>;
   setPhase(eventId: string, to: GamePhase, changedBy: string | null): Promise<SpyEvent>;
+  /**
+   * イベント行の更新日時だけを進める。
+   *
+   * 参加者の端末は events の変化を見て画面を更新する。
+   * お知らせを出したときも、events を触って同じ合図に乗せる。
+   * こうすると購読が1本で済み、会場へ飛ぶ通数が半分になる。
+   */
+  touchEvent(eventId: string): Promise<void>;
   listPhaseHistory(eventId: string): Promise<PhaseHistoryEntry[]>;
 
   /* ------------- participants ------------- */

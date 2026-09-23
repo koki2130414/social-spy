@@ -208,6 +208,11 @@ export class DemoRepo implements Repo {
     return event;
   }
 
+  async touchEvent(eventId: string): Promise<void> {
+    const event = state().events.find((e) => e.id === eventId);
+    if (event) event.updatedAt = now();
+  }
+
   async listPhaseHistory(eventId: string): Promise<PhaseHistoryEntry[]> {
     return state()
       .phaseHistory.filter((p) => p.eventId === eventId)
