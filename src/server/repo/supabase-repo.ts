@@ -431,6 +431,19 @@ export class SupabaseRepo implements Repo {
     return mapParticipant(unwrap(data, error, 'setParticipantAttendance'));
   }
 
+  async setParticipantDisplayName(
+    participantId: string,
+    displayName: string,
+  ): Promise<Participant> {
+    const { data, error } = await this.db
+      .from('participants')
+      .update({ display_name: displayName, updated_at: new Date().toISOString() })
+      .eq('id', participantId)
+      .select('*')
+      .single();
+    return mapParticipant(unwrap(data, error, 'setParticipantDisplayName'));
+  }
+
   async setParticipantLoginAttempts(
     participantId: string,
     input: { failedLoginCount: number; loginLockedUntil: string | null },

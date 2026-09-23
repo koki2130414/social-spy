@@ -114,6 +114,13 @@ export interface Repo {
   /** 当日の欠席／出席を切り替える。運営だけが呼べること（権限確認は呼び出し側） */
   setParticipantAttendance(participantId: string, attending: boolean): Promise<Participant>;
   /**
+   * 表示名を変える。
+   *
+   * QRとパスワードは参加者IDに紐づいているので、名前を変えても
+   * 配ったカードはそのまま使える（刷り直しは要らない）。
+   */
+  setParticipantDisplayName(participantId: string, displayName: string): Promise<Participant>;
+  /**
    * ログインの試行回数と一時停止の記録を書き換える。
    * パスワードの総当たりを止めるために使う。
    */

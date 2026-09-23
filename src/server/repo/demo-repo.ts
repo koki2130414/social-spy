@@ -333,6 +333,17 @@ export class DemoRepo implements Repo {
     return p;
   }
 
+  async setParticipantDisplayName(
+    participantId: string,
+    displayName: string,
+  ): Promise<Participant> {
+    const p = state().participants.find((x) => x.id === participantId);
+    if (!p) throw new Error('PARTICIPANT_NOT_FOUND');
+    p.displayName = displayName;
+    p.updatedAt = now();
+    return p;
+  }
+
   async setParticipantLoginAttempts(
     participantId: string,
     input: { failedLoginCount: number; loginLockedUntil: string | null },
