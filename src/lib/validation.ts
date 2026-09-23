@@ -120,6 +120,15 @@ export const participantAttendanceSchema = z.object({
   attending: z.boolean({ required_error: '出欠を指定してください。' }),
 });
 
+/** 表示名の変更（受付での聞き間違い直し、SNSでの名前にそろえる） */
+export const participantRenameSchema = z.object({
+  displayName: z
+    .string()
+    .trim()
+    .min(1, '表示名を入力してください。')
+    .max(24, '表示名は24文字以内で入力してください。'),
+});
+
 /** 運営が参加者を代理登録するときの入力 */
 export const participantCreateSchema = z.object({
   displayName: z
