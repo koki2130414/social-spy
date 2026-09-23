@@ -635,8 +635,20 @@ export async function autoAssignSpies(eventId: string, count?: number): Promise<
   if (participants.length === 0) {
     throw new ServiceError('NO_PARTICIPANTS', '参加者がいません。', 400);
   }
-  const { spyIds } = selectSpies(participants, count ?? event.spyCount);
-  return repo.setParticipantRoles(eventId, spyIds);
+
+  // その場で人数を渡されたらそれを使う。渡されなければイベントの設定どおり。
+  const spyCount = count ?? event.spyCount;
+  const { spyIds } = selectSpies(participants, spyCount);
+  const assigned = await repo.setParticipantRoles(eventId, spyIds);
+
+  // 選び終えてから、指定された人数をイベントの設定としても覚える。
+  // 覚えないと、画面のボタンに出る人数と実際に選ばれた人数がずれて、
+  // 当日「何人で選んだのか」が分からなくなる。
+  // 先に覚えないのは、選出に失敗したときに設定だけ変わるのを避けるため。
+  if (count !== undefined && count !== event.spyCount) {
+    await repo.updateEvent(eventId, { spyCount: count });
+  }
+  return assigned;
 }
 
 export async function setParticipantRole(
