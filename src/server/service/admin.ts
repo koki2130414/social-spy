@@ -623,6 +623,47 @@ export async function setParticipantAttendance(
   return repo.setParticipantAttendance(participantId, attending);
 }
 
+/**
+ * 表示名を変える。
+ *
+ * 受付で聞き間違えた、SNSでの名前にそろえたい、といったときに使う。
+ * QRとパスワードは参加者IDに紐づいているので、名前を変えても
+ * 配ったカードはそのまま使える（刷り直しは要らない）。
+ *
+ * 同じイベントに同じ名前が並ぶと、投票のときに誰を選んだのか
+ * 分からなくなるので、登録と同じ条件で重複を断る。
+ */
+export async function renameParticipant(
+  eventId: string,
+  participantId: string,
+  displayName: string,
+): Promise<Participant> {
+  await requireEventAccess(eventId);
+  const repo = getRepo();
+  const participant = await repo.getParticipant(participantId);
+  // 別イベントの参加者IDを渡して他会場の人を書き換えられないようにする
+  if (!participant || participant.eventId !== eventId) {
+    throw new ServiceError('PARTICIPANT_NOT_FOUND', '参加者が見つかりません。', 404);
+  }
+
+  const next = displayName.trim();
+  if (!next) {
+    throw new ServiceError('VALIDATION_ERROR', '表示名を入力してください。', 422);
+  }
+  if (next === participant.displayName) return participant;
+
+  const duplicated = await repo.findParticipantByName(eventId, next);
+  if (duplicated && duplicated.id !== participantId) {
+    throw new ServiceError(
+      'DUPLICATE_NAME',
+      'その表示名はすでに登録されています。別の名前にしてください。',
+      409,
+    );
+  }
+
+  return repo.setParticipantDisplayName(participantId, next);
+}
+
 /** 参加者ごとの参加用URL（この人専用の入口） */
 export function buildJoinUrl(participantId: string, eventId: string): string {
   return `${appUrl()}/j/${createJoinToken(participantId, eventId)}`;
