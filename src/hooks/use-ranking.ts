@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiGet, ApiError } from '@/lib/api';
-import { nextPollDelay } from '@/lib/polling';
+import { apiGetRevalidate, ApiError } from '@/lib/api';
+import { nextPollDelay, relaxedInterval } from '@/lib/polling';
 import type { ParticipantRanking } from '@/server/service/participant';
 
 /**
@@ -13,19 +13,31 @@ import type { ParticipantRanking } from '@/server/service/participant';
  * サーバー側にも数秒のキャッシュがあり、同時に開かれても
  * データベースへの問い合わせはその分まとめられる。
  */
-const POLL_INTERVAL_MS = 20000;
+const POLL_BASE_MS = 20000;
+const POLL_MAX_MS = 45000;
 
 export function useRanking() {
   const [data, setData] = useState<ParticipantRanking | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
+  /** いまの問い合わせ間隔。順位が動かないあいだは広がっていく */
+  const intervalRef = useRef(POLL_BASE_MS);
 
   const refresh = useCallback(async () => {
     try {
-      const next = await apiGet<ParticipantRanking>('/api/participant/ranking');
+      // 前回と同じ順位ならサーバーは本文を返さない（通信量を抑える）
+      const { data: next, changed } = await apiGetRevalidate<ParticipantRanking>(
+        '/api/participant/ranking',
+      );
       if (!mounted.current) return;
-      setData(next);
+      intervalRef.current = relaxedInterval(
+        intervalRef.current,
+        changed,
+        POLL_BASE_MS,
+        POLL_MAX_MS,
+      );
+      if (changed) setData(next);
       setError(null);
     } catch (e) {
       if (!mounted.current) return;
@@ -48,12 +60,14 @@ export function useRanking() {
         // 交流会では大半の人が端末をしまっているので、ここが一番効く。
         if (!document.hidden) void refresh();
         tick();
-      }, nextPollDelay(POLL_INTERVAL_MS));
+      }, nextPollDelay(intervalRef.current));
     };
     tick();
 
     const onVisible = () => {
-      if (!document.hidden) void refresh();
+      if (document.hidden) return;
+      intervalRef.current = POLL_BASE_MS;
+      void refresh();
     };
     document.addEventListener('visibilitychange', onVisible);
 

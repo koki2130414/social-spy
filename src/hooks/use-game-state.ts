@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiGet, ApiError } from '@/lib/api';
-import { nextPollDelay } from '@/lib/polling';
+import { apiGetRevalidate, ApiError } from '@/lib/api';
+import { nextPollDelay, relaxedInterval } from '@/lib/polling';
 import type { ParticipantGameState } from '@/lib/types';
 import { useRealtimeEvent } from './use-realtime';
 
@@ -12,9 +12,13 @@ import { useRealtimeEvent } from './use-realtime';
  * フェーズ変更とお知らせは Realtime が即座に届けるので、
  * ここは Realtime が届かなかった時の取りこぼし回収でしかない。
  * 会場では全員が同時に開くため、短くするとその人数分の負荷が
- * そのままサーバーと会場の回線にかかる。100人なら4秒間隔で毎秒25回。
+ * そのままサーバーと会場の回線にかかる。
+ *
+ * 何も変わらない間は間隔を広げ、変化があれば base に戻す。
+ * ゲームの大半の時間は何も動かないので、これだけで往復が半分近く減る。
  */
-const POLL_INTERVAL_MS = 15000;
+const POLL_BASE_MS = 15000;
+const POLL_MAX_MS = 30000;
 
 export interface GameStateResult {
   state: ParticipantGameState | null;
@@ -32,12 +36,22 @@ export function useGameState(): GameStateResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const mounted = useRef(true);
+  /** いまの問い合わせ間隔。変化が無いあいだは広がっていく */
+  const intervalRef = useRef(POLL_BASE_MS);
 
   const refresh = useCallback(async () => {
     try {
-      const next = await apiGet<ParticipantGameState>('/api/participant/state');
+      // 前回と同じ内容ならサーバーは本文を返さない（通信量を抑える）
+      const { data, changed } =
+        await apiGetRevalidate<ParticipantGameState>('/api/participant/state');
       if (!mounted.current) return;
-      setState(next);
+      intervalRef.current = relaxedInterval(
+        intervalRef.current,
+        changed,
+        POLL_BASE_MS,
+        POLL_MAX_MS,
+      );
+      if (changed) setState(data);
       setError(null);
     } catch (e) {
       if (!mounted.current) return;
@@ -49,6 +63,12 @@ export function useGameState(): GameStateResult {
       if (mounted.current) setLoading(false);
     }
   }, []);
+
+  /** すぐ最新へ追いつきたいとき（画面復帰・Realtimeの合図・手動）は間隔も戻す */
+  const refreshNow = useCallback(async () => {
+    intervalRef.current = POLL_BASE_MS;
+    await refresh();
+  }, [refresh]);
 
   useEffect(() => {
     mounted.current = true;
@@ -63,13 +83,13 @@ export function useGameState(): GameStateResult {
         // 交流会では大半の人が端末をしまっているので、ここが一番効く。
         if (!document.hidden) void refresh();
         tick();
-      }, nextPollDelay(POLL_INTERVAL_MS));
+      }, nextPollDelay(intervalRef.current));
     };
     tick();
 
     // 戻ってきた瞬間は待たせずに最新へ追いつく
     const onVisible = () => {
-      if (!document.hidden) void refresh();
+      if (!document.hidden) void refreshNow();
     };
     document.addEventListener('visibilitychange', onVisible);
 
@@ -78,9 +98,9 @@ export function useGameState(): GameStateResult {
       clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [refresh]);
+  }, [refresh, refreshNow]);
 
-  useRealtimeEvent(state?.event.id ?? null, () => void refresh());
+  useRealtimeEvent(state?.event.id ?? null, () => void refreshNow());
 
-  return { state, loading, error, refresh };
+  return { state, loading, error, refresh: refreshNow };
 }
