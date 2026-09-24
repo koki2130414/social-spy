@@ -19,7 +19,7 @@ import { useAdmin } from '@/components/spy/admin-shell';
 import { useAdminResource } from '@/hooks/use-admin-resource';
 import { completionPercent } from '@/lib/core/score';
 import { apiSend, ApiError } from '@/lib/api';
-import { isValidPhaseTransition, PHASE_META } from '@/lib/core/phase';
+import { isValidPhaseTransition, PHASE_META, SPY_MISSION_HIDDEN_META } from '@/lib/core/phase';
 import type { GamePhase, SpyEvent, SpyNotification } from '@/lib/types';
 
 interface Dashboard {
@@ -234,7 +234,9 @@ export default function AdminDashboardPage() {
                   <span className="headline-mono block py-2 text-base text-foreground">
                     {PHASE_META[event.phase].label} → {PHASE_META[confirm].label}
                   </span>
-                  {PHASE_META[confirm].description}
+                  {confirm === 'SPY_MISSION_REVEALED' && event && !event.spyMissionPublic
+                    ? `${SPY_MISSION_HIDDEN_META.description}（このイベントはSPY MISSIONを公開しない設定です。SPY本人以外には内容が出ません）`
+                    : PHASE_META[confirm].description}
                   <br />
                   この操作は取り消せません。全参加者の画面が切り替わります。
                 </>
