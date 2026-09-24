@@ -73,6 +73,8 @@ export const eventSchema = z.object({
   durationMinutes: z.coerce.number().int().min(10, '10分以上で設定してください。').max(600),
   spyRevealOffsetMinutes: z.coerce.number().int().min(0).max(600),
   spyCount: z.coerce.number().int().min(0, '0以上で設定してください。').max(20),
+  /** SPY MISSION の内容を全員に見せるか。切ると公開のフェーズでもSPY本人だけ */
+  spyMissionPublic: z.boolean(),
   registrationOpen: z.boolean(),
 });
 export type EventFormValues = z.infer<typeof eventSchema>;

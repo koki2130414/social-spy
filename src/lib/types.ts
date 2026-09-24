@@ -36,6 +36,14 @@ export interface SpyEvent {
   /** ACTIVE 開始から何分後に SPY MISSION を公開する想定か（運営の目安） */
   spyRevealOffsetMinutes: number;
   spyCount: number;
+  /**
+   * SPY MISSION の内容を全員に見せるか。
+   *
+   * false にすると、公開のフェーズに進んでもSPY本人以外には出さない。
+   * 「SPYが何をしているのか分からないまま探す」進行にしたいときに使う。
+   * 画面だけでなくサーバー側の取得でも外すので、通信を覗いても見えない。
+   */
+  spyMissionPublic: boolean;
   registrationOpen: boolean;
   phase: GamePhase;
   phaseChangedAt: string;
