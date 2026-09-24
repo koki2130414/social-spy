@@ -4,13 +4,13 @@ import { FileLock2, ShieldAlert } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ClassifiedPanel } from '@/components/spy/classified-panel';
 import { useGame } from '@/components/spy/game-shell';
-import { isSpyMissionPublic } from '@/lib/core/phase';
 
 export default function IntelPage() {
   const { state } = useGame();
   if (!state) return null;
 
-  const published = isSpyMissionPublic(state.event.phase);
+  // 公開するかどうかはイベントの設定にもよるので、サーバーが出した結論を使う
+  const published = state.spyMissionsPublic;
   const missions = state.spyMissions;
 
   // 未公開 かつ 自分がSPYでない → 何も見せない
