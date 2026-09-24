@@ -22,6 +22,8 @@ export interface EventInput {
   durationMinutes: number;
   spyRevealOffsetMinutes: number;
   spyCount: number;
+  /** SPY MISSION の内容を全員に見せるか */
+  spyMissionPublic: boolean;
   registrationOpen: boolean;
 }
 

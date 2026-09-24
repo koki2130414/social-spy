@@ -33,6 +33,9 @@ function mapEvent(r: Row): SpyEvent {
     durationMinutes: r.duration_minutes,
     spyRevealOffsetMinutes: r.spy_reveal_offset_minutes,
     spyCount: r.spy_count,
+    // 列がまだ無いデータベースでも動くようにしておく（移行の前後で画面が落ちない）。
+    // 既定は「公開する」＝これまでと同じ動き
+    spyMissionPublic: (r.spy_mission_public as boolean | null) ?? true,
     registrationOpen: r.registration_open,
     phase: r.phase as GamePhase,
     phaseChangedAt: r.phase_changed_at,
@@ -196,6 +199,7 @@ export class SupabaseRepo implements Repo {
         duration_minutes: input.durationMinutes,
         spy_reveal_offset_minutes: input.spyRevealOffsetMinutes,
         spy_count: input.spyCount,
+        spy_mission_public: input.spyMissionPublic,
         registration_open: input.registrationOpen,
       })
       .select('*')
@@ -212,6 +216,7 @@ export class SupabaseRepo implements Repo {
     if (input.spyRevealOffsetMinutes !== undefined)
       patch.spy_reveal_offset_minutes = input.spyRevealOffsetMinutes;
     if (input.spyCount !== undefined) patch.spy_count = input.spyCount;
+    if (input.spyMissionPublic !== undefined) patch.spy_mission_public = input.spyMissionPublic;
     if (input.registrationOpen !== undefined) patch.registration_open = input.registrationOpen;
 
     const { data, error } = await this.db
