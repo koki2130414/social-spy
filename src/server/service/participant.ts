@@ -11,7 +11,7 @@ import {
   canRegister,
   canUpdateMissionProgress,
   isIdentityRevealed,
-  isSpyMissionPublic,
+  isSpyMissionShared,
 } from '@/lib/core/phase';
 import { visibleSpyMissions } from '@/lib/core/intel';
 import { computeFinalRanking, type FinalRankingRow } from '@/lib/core/final-score';
@@ -199,7 +199,10 @@ export async function getGameState(): Promise<ParticipantGameState> {
   //  ・参加者の表を丸ごと取らない（人数は数え上げ、投票先は1件だけ引く）
   //  ・問い合わせは待ち合わせの回数を減らして、1回のまとまりで流す
   //  ・その場面で要らないものは引かない（SPY MISSIONの一覧は公開後だけ）
-  const needsPublicSpyMissions = !isSpy(me) && isSpyMissionPublic(event.phase);
+  // 「公開する」設定が切ってあれば、公開のフェーズでもSPY MISSIONは引かない。
+  // 画面で隠すのではなく、そもそもサーバーから出さない
+  const shared = isSpyMissionShared(event);
+  const needsPublicSpyMissions = !isSpy(me) && shared;
 
   const [assigned, notifications, myVotes, participantCount, eventMissions] = await Promise.all([
     repo.listAssignedMissions(me.id),
@@ -229,7 +232,7 @@ export async function getGameState(): Promise<ParticipantGameState> {
     }));
 
   const spyMissions = visibleSpyMissions({
-    phase: event.phase,
+    shared,
     isSpy: isSpy(me),
     ownSpyMissions,
     publicSpyMissions,

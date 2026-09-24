@@ -44,6 +44,7 @@ const NEW_EVENT = {
   durationMinutes: 90,
   spyRevealOffsetMinutes: 45,
   spyCount: 2,
+  spyMissionPublic: true,
   registrationOpen: true,
 };
 

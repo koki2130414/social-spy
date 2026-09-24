@@ -120,6 +120,7 @@ describe('参加者1人ぶんのQR', () => {
       durationMinutes: 90,
       spyRevealOffsetMinutes: 60,
       spyCount: 2,
+      spyMissionPublic: true,
       registrationOpen: true,
     });
 

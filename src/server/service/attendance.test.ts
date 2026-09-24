@@ -118,6 +118,7 @@ describe('欠席にした参加者', () => {
       durationMinutes: 60,
       spyRevealOffsetMinutes: 30,
       spyCount: 1,
+      spyMissionPublic: true,
       registrationOpen: true,
     });
     const outsider = await repo.createParticipant({

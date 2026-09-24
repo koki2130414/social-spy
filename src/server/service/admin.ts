@@ -339,7 +339,17 @@ export async function changePhase(eventId: string, to: GamePhase): Promise<SpyEv
 
   const updated = await repo.setPhase(eventId, to, session.uid);
 
-  const notification = PHASE_NOTIFICATION[to];
+  // 「公開しない」設定のときは、公開したと書かない。
+  // 全員に届くお知らせとプッシュ通知なので、ここが食い違うと
+  // 「公開されたのに何も出ない」と受け取られる
+  const notification =
+    to === 'SPY_MISSION_REVEALED' && !event.spyMissionPublic
+      ? {
+          title: 'FINAL PHASE',
+          body: 'ゲームは終盤だ。誰がSPYか、見当をつけておけ。',
+          kind: 'ALERT' as const,
+        }
+      : PHASE_NOTIFICATION[to];
   if (notification) {
     // お知らせ自体は画面が読むので、ここで必ず書く
     await repo.createNotification({ eventId, ...notification });
