@@ -10,7 +10,7 @@
  *  - 管理画面はキャッシュ対象外。
  * ========================================================================== */
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL_CACHE = 'spy-shell-' + VERSION;
 const ASSET_CACHE = 'spy-assets-' + VERSION;
 const OFFLINE_URL = '/offline';
@@ -165,9 +165,35 @@ self.addEventListener('notificationclick', (event) => {
 /* -------------------------------------------------------------------------
  * アプリからの指示
  * ---------------------------------------------------------------------- */
+/**
+ * 参加者が使う画面を、あとからまとめてキャッシュしておく。
+ *
+ * 会場で電波が切れたあとに画面を再読み込みすると、まだ一度も開いて
+ * いない画面はブラウザのエラー（オフライン画面）になる。
+ * 先に外枠だけ取っておけば、切れていても開ける。
+ *
+ * 受付の混雑に足さないよう、アプリ側が落ち着いてから指示を出す。
+ * 失敗しても黙って諦める（取れなくても通常の動作には影響しない）。
+ */
+async function warmRoutes(urls) {
+  const cache = await caches.open(SHELL_CACHE);
+  for (const url of urls) {
+    try {
+      const request = new Request(url, { credentials: 'same-origin' });
+      const response = await fetch(request);
+      if (response && response.ok) await cache.put(request, response.clone());
+    } catch {
+      /* 取れなければそのまま */
+    }
+  }
+}
+
 self.addEventListener('message', (event) => {
   const data = event.data || {};
   if (data.type === 'SKIP_WAITING') self.skipWaiting();
+  if (data.type === 'WARM_ROUTES' && Array.isArray(data.urls)) {
+    event.waitUntil(warmRoutes(data.urls.slice(0, 8)));
+  }
   if (data.type === 'CLEAR_CACHES') {
     event.waitUntil(caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))));
   }
