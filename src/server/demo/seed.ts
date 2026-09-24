@@ -79,6 +79,7 @@ export function buildDemoDataset(): DemoDataset {
     durationMinutes: 90,
     spyRevealOffsetMinutes: 45,
     spyCount: 2,
+    spyMissionPublic: true,
     registrationOpen: true,
     phase: 'LOBBY',
     phaseChangedAt: iso(-30),
