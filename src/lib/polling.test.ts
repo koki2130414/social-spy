@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nextPollDelay, realtimeJitter } from './polling';
+import { nextPollDelay, realtimeJitter, relaxedInterval } from './polling';
 
 /**
  * 「同時に叩かない」ための計算。
@@ -50,5 +50,32 @@ describe('Realtimeで一斉に届いたときのずらし', () => {
     const worst = Math.max(...buckets.values());
     // 何もしなければ 101 件が同じ瞬間に来る。散らせば1/5以下になる
     expect(worst).toBeLessThan(20);
+  });
+});
+
+describe('変化が無いときに間隔を広げる', () => {
+  it('変化が無いあいだは広がり、上限で止まる', () => {
+    let ms = 15000;
+    const seen: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      ms = relaxedInterval(ms, false, 15000, 30000);
+      seen.push(ms);
+    }
+    expect(seen[0]).toBeGreaterThan(15000);
+    expect(Math.max(...seen)).toBe(30000);
+    // 上限を超えない
+    expect(seen.every((x) => x <= 30000)).toBe(true);
+  });
+
+  it('変化があれば、すぐ元の間隔に戻る', () => {
+    // 「変わったのに気づくのが遅れる」のを、広げた1回ぶんに収めるため
+    const relaxed = relaxedInterval(
+      relaxedInterval(15000, false, 15000, 30000),
+      false,
+      15000,
+      30000,
+    );
+    expect(relaxed).toBeGreaterThan(15000);
+    expect(relaxedInterval(relaxed, true, 15000, 30000)).toBe(15000);
   });
 });
