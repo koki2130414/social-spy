@@ -1,8 +1,11 @@
-import type { AssignedMission, GamePhase } from '@/lib/types';
-import { isSpyMissionPublic } from './phase';
+import type { AssignedMission } from '@/lib/types';
 
 export interface SpyIntelInput {
-  phase: GamePhase;
+  /**
+   * 全員に見せてよい段階か。
+   * フェーズだけでなくイベントの設定（公開する／しない）も含めた結論を渡す。
+   */
+  shared: boolean;
   /** 閲覧者自身がSPYかどうか */
   isSpy: boolean;
   /** SPY本人に割り当てられたSPY MISSION（本人以外には渡さない） */
@@ -14,10 +17,10 @@ export interface SpyIntelInput {
 /**
  * 閲覧者に見せてよい SPY MISSION を決定する。
  *  - SPY本人  : 常に自分のSPY MISSIONを見られる
- *  - 一般参加者: 公開フェーズ以降のみ内容を見られる（誰がSPYかは分からない）
+ *  - 一般参加者: 公開してよい段階のときだけ内容を見られる（誰がSPYかは分からない）
  */
 export function visibleSpyMissions(input: SpyIntelInput): AssignedMission[] | null {
   if (input.isSpy) return input.ownSpyMissions;
-  if (isSpyMissionPublic(input.phase)) return input.publicSpyMissions;
+  if (input.shared) return input.publicSpyMissions;
   return null;
 }

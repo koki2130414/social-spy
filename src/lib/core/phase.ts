@@ -84,7 +84,31 @@ export function canVoteInPhase(phase: GamePhase): boolean {
   return phase === 'VOTING';
 }
 
-/** SPY MISSION が全員に公開されているフェーズか */
+/**
+ * SPY MISSION を公開しない進行のときの、SPY_MISSION_REVEALED の見せ方。
+ *
+ * 「公開しました」と書いてあるのに何も出ない、という食い違いを防ぐ。
+ */
+export const SPY_MISSION_HIDDEN_META = {
+  label: '終盤',
+  headline: 'FINAL PHASE',
+  description: 'ゲームは終盤です。誰がSPYか、見当をつけておいてください。',
+} as const;
+
+/**
+ * SPY MISSION を全員に見せてよいか。
+ *
+ * フェーズが公開の段階に進んでいて、かつイベントの設定が「公開する」のときだけ true。
+ * 設定を切っていれば、公開のフェーズでもSPY本人以外には出さない。
+ */
+export function isSpyMissionShared(event: {
+  phase: GamePhase;
+  spyMissionPublic: boolean;
+}): boolean {
+  return event.spyMissionPublic && isSpyMissionPublic(event.phase);
+}
+
+/** SPY MISSION が全員に公開されているフェーズか（設定は見ない） */
 export function isSpyMissionPublic(phase: GamePhase): boolean {
   return (
     phase === 'SPY_MISSION_REVEALED' ||
@@ -122,13 +146,20 @@ export function isValidPhaseTransition(from: GamePhase, to: GamePhase): boolean 
 }
 
 /** 現在のフェーズにおける「次に行うべき操作」の導線 */
-export function participantPrimaryAction(phase: GamePhase): { label: string; href: string } {
+export function participantPrimaryAction(
+  phase: GamePhase,
+  /** SPY情報のページを開ける人か（SPY本人、または公開されている場合） */
+  spyIntelAvailable = true,
+): { label: string; href: string } {
   switch (phase) {
     case 'LOBBY':
     case 'ACTIVE':
       return { label: 'MISSIONを確認する', href: '/game/missions' };
     case 'SPY_MISSION_REVEALED':
-      return { label: 'SPY情報を確認する', href: '/game/intel' };
+      // 公開しない進行では SPY情報のページ自体が無いので、そこへ案内しない
+      return spyIntelAvailable
+        ? { label: 'SPY情報を確認する', href: '/game/intel' }
+        : { label: 'MISSIONを確認する', href: '/game/missions' };
     case 'VOTING':
       return { label: 'FINAL VOTE へ進む', href: '/game/vote' };
     case 'IDENTITY_REVEALED':
