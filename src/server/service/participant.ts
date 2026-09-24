@@ -267,7 +267,9 @@ export async function getGameState(): Promise<ParticipantGameState> {
     totalCount: generalMissions.length,
     spyMissions,
     spyMissionsPublic: spyMissions !== null && !isSpy(me),
-    notifications,
+    // 画面に出るのは新しい3件だけ。全部を毎回送ると、
+    // フェーズが進むほど1回の通信が重くなっていく
+    notifications: notifications.slice(0, 5),
     // 名前はここで引かない。投票画面が持っている候補一覧から引ける。
     // 毎回の更新で最大10人ぶんの名前を引くと、その通信が101台ぶん走る
     votedTargetIds: myVotes.map((v) => v.targetParticipantId),
