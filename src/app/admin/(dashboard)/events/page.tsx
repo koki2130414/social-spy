@@ -86,6 +86,7 @@ export default function AdminEventsPage() {
       durationMinutes: 90,
       spyRevealOffsetMinutes: 45,
       spyCount: 2,
+      spyMissionPublic: true,
       registrationOpen: true,
     },
   });
@@ -100,6 +101,7 @@ export default function AdminEventsPage() {
         durationMinutes: event.durationMinutes,
         spyRevealOffsetMinutes: event.spyRevealOffsetMinutes,
         spyCount: event.spyCount,
+        spyMissionPublic: event.spyMissionPublic,
         registrationOpen: event.registrationOpen,
       });
     }
@@ -187,6 +189,7 @@ export default function AdminEventsPage() {
       durationMinutes: 90,
       spyRevealOffsetMinutes: 45,
       spyCount: 2,
+      spyMissionPublic: true,
       registrationOpen: true,
     });
   };
@@ -213,6 +216,7 @@ export default function AdminEventsPage() {
   });
 
   const registrationOpen = watch('registrationOpen');
+  const spyMissionPublic = watch('spyMissionPublic');
 
   return (
     <div className="space-y-6">
@@ -416,6 +420,22 @@ export default function AdminEventsPage() {
               {formState.errors.spyCount ? (
                 <p className="text-xs text-primary">{formState.errors.spyCount.message}</p>
               ) : null}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 sm:col-span-2">
+              <div>
+                <Label htmlFor="spyMissionPublic">SPY MISSIONを全員に公開する</Label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  オンにすると「SPY MISSION公開」以降、全員がSPY MISSIONの内容を読めます
+                  （誰がSPYかは分かりません）。オフにすると、進行が進んでもSPY本人以外には出しません。
+                  ヒント無しで探す進行にしたいときはオフにしてください。
+                </p>
+              </div>
+              <Switch
+                id="spyMissionPublic"
+                checked={spyMissionPublic}
+                onCheckedChange={(v) => setValue('spyMissionPublic', v, { shouldDirty: true })}
+              />
             </div>
 
             <div className="flex items-center justify-between gap-3 sm:col-span-2">
