@@ -10,15 +10,19 @@ import { useGame } from '@/components/spy/game-shell';
 import { InstallPrompt } from '@/components/pwa/install-prompt';
 import { PushToggle } from '@/components/pwa/push-toggle';
 import { IntroGate } from '@/components/spy/intro-gate';
-import { PHASE_META, participantPrimaryAction } from '@/lib/core/phase';
+import { PHASE_META, SPY_MISSION_HIDDEN_META, participantPrimaryAction } from '@/lib/core/phase';
 
 export default function GameHomePage() {
   const { state } = useGame();
   const [roleVisible, setRoleVisible] = useState(true);
 
   if (!state) return null;
-  const meta = PHASE_META[state.event.phase];
-  const primary = participantPrimaryAction(state.event.phase);
+  // SPY情報のページを開けるのは、SPY本人か、公開されているとき
+  const spyIntelAvailable = state.me.isSpy || state.spyMissionsPublic;
+  // 公開しない進行では「公開しました」と書かない（開いても何も無いため）
+  const hideSpyIntel = state.event.phase === 'SPY_MISSION_REVEALED' && !spyIntelAvailable;
+  const meta = hideSpyIntel ? SPY_MISSION_HIDDEN_META : PHASE_META[state.event.phase];
+  const primary = participantPrimaryAction(state.event.phase, spyIntelAvailable);
   const latest = state.notifications[0];
 
   return (
