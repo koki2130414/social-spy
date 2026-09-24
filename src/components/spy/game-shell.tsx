@@ -16,12 +16,7 @@ import {
 import { IntroGate } from './intro-gate';
 import { useGameState, type GameStateResult } from '@/hooks/use-game-state';
 import { useOnlineStatus } from '@/hooks/use-online-status';
-import {
-  PHASE_META,
-  canVoteInPhase,
-  isIdentityRevealed,
-  isSpyMissionPublic,
-} from '@/lib/core/phase';
+import { PHASE_META, canVoteInPhase, isIdentityRevealed } from '@/lib/core/phase';
 import { cn } from '@/lib/utils';
 import { SpyLogo } from './logo';
 import { PhaseBadge } from './phase-badge';
@@ -106,7 +101,8 @@ export function GameShell({ children }: { children: React.ReactNode }) {
 
   const { state } = game;
   const phase = state.event.phase;
-  const spyIntelAvailable = state.me.isSpy || isSpyMissionPublic(phase);
+  // 公開するかどうかはイベントの設定にもよるので、サーバーが出した結論を使う
+  const spyIntelAvailable = state.me.isSpy || state.spyMissionsPublic;
 
   const nav: NavItem[] = [
     { href: '/game', label: 'HOME', icon: Home, enabled: true },
