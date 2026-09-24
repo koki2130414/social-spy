@@ -1,11 +1,12 @@
-import { fail, ok } from '@/server/http';
+import { fail, okRevalidate } from '@/server/http';
 import { getGameState } from '@/server/service/participant';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    return ok(await getGameState());
+    // 変わっていなければ本文を送らない（会場の回線を空ける）
+    return okRevalidate(request, await getGameState());
   } catch (error) {
     return fail(error);
   }
