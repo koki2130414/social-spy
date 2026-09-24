@@ -1,11 +1,12 @@
-import { fail, ok } from '@/server/http';
+import { fail, okRevalidate } from '@/server/http';
 import { listVoteCandidates } from '@/server/service/participant';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    return ok({ candidates: await listVoteCandidates() });
+    // 投票先の顔ぶれは変わらない。開き直しても本文は送らない
+    return okRevalidate(request, { candidates: await listVoteCandidates() });
   } catch (error) {
     return fail(error);
   }
