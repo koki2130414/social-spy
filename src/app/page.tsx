@@ -68,6 +68,10 @@ export default function HomePage() {
             <Link href="/demo">デモを試す / DEMO</Link>
           </Button>
         ) : null}
+        {/* ゲーム前に読めるように。入場していなくても開ける静的なページ */}
+        <Button asChild variant="outline" size="lg" className="w-full">
+          <Link href="/guide">遊び方を見る / GUIDE</Link>
+        </Button>
         <Button asChild variant="ghost" size="default" className="w-full">
           <Link href="/admin/login">運営者ログイン</Link>
         </Button>
