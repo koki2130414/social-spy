@@ -23,6 +23,7 @@ function p(id: string, attending = true, role: Participant['role'] = 'AGENT'): P
     attending,
     failedLoginCount: 0,
     loginLockedUntil: null,
+    enteredAt: null,
     joinedAt: '2026-01-01T00:00:00.000Z',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',

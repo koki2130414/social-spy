@@ -23,6 +23,7 @@ function participant(id: string, over: Partial<Participant> = {}): Participant {
     attending: true,
     failedLoginCount: 0,
     loginLockedUntil: null,
+    enteredAt: null,
     joinedAt: '2026-01-01T00:00:00.000Z',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
