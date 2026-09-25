@@ -394,6 +394,11 @@ export interface AdminParticipantRow {
   issuedPassword: string | null;
   /** 当日その人が来ているか。false は運営が欠席にした人 */
   attending: boolean;
+  /**
+   * 最初にアプリへ入れた時刻。null なら、まだ一度も入れていない。
+   * 受付で「配ったQRを読めたか」を見るために使う。
+   */
+  enteredAt: string | null;
   joinedAt: string;
   /** この参加者専用の参加用URL。運営が本人に渡す */
   joinUrl: string;
@@ -428,6 +433,7 @@ export async function listAdminParticipants(eventId: string): Promise<AdminParti
       loginId: p.loginId,
       issuedPassword: issuedPasswords[p.id] ?? null,
       attending: p.attending,
+      enteredAt: p.enteredAt,
       joinedAt: p.joinedAt,
       joinUrl: buildJoinUrl(p.id, p.eventId),
     };
