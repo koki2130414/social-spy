@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { appUrl } from '@/lib/env';
 import { getRepo } from '@/server/repo';
 import { setParticipantSession, verifyJoinToken } from '@/server/auth/session';
+import { noteEntered } from '@/server/service/participant';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,5 +35,7 @@ export async function GET(_request: Request, { params }: Ctx) {
   }
 
   await setParticipantSession(participant.id, participant.eventId);
+  // 受付で「QRを読めた人」が分かるように印を付ける（失敗しても入場は止めない）
+  await noteEntered(participant.id);
   return NextResponse.redirect(`${base}/game`);
 }
