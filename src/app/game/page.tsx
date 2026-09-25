@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { ArrowRight, Bell, Eye, EyeOff, Target } from 'lucide-react';
+import { ArrowRight, Bell, BookOpen, Eye, EyeOff, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ClassifiedPanel } from '@/components/spy/classified-panel';
@@ -127,6 +127,13 @@ export default function GameHomePage() {
         <p className="label-mono mb-2">はじめての方へ</p>
         {/* 自動再生は GameShell 側で1回だけ。ここは見直し用 */}
         <IntroGate autoPlay={false} label="遊び方の映像をもう一度見る" />
+        {/* 映像を見られない場所でも読めるよう、文字の説明も置く */}
+        <Button asChild variant="outline" size="lg" className="mt-3 w-full justify-between">
+          <Link href="/guide">
+            ルールと景品を読む
+            <BookOpen className="h-4 w-4" aria-hidden />
+          </Link>
+        </Button>
       </section>
 
       <section className="flex flex-wrap items-center gap-2 pt-2">
