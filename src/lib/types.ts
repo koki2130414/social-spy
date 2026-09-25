@@ -73,6 +73,13 @@ export interface Participant {
   failedLoginCount: number;
   /** この時刻まではログインを受け付けない。null なら止めていない */
   loginLockedUntil: string | null;
+  /**
+   * 最初にアプリへ入れた時刻。null なら、まだ一度も入れていない。
+   *
+   * 受付で「配ったQRをちゃんと読めたか」を見るための印。
+   * 一度入ったら上書きしない（何度開き直しても最初の時刻のまま）。
+   */
+  enteredAt: string | null;
   joinedAt: string;
   createdAt: string;
   updatedAt: string;
