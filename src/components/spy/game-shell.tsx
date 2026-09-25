@@ -7,6 +7,7 @@ import {
   BarChart3,
   ClipboardList,
   EyeOff,
+  HelpCircle,
   Home,
   Loader2,
   Trophy,
@@ -148,7 +149,21 @@ export function GameShell({ children }: { children: React.ReactNode }) {
           <div className="mx-auto w-full max-w-lg px-4 py-3">
             <div className="flex items-center justify-between gap-2">
               <SpyLogo compact />
-              <PhaseBadge phase={phase} />
+              <div className="flex shrink-0 items-center gap-1">
+                <PhaseBadge phase={phase} />
+                {/*
+                  遊び方はゲーム中いつでも開けるようにする。
+                  下のナビは6つで埋まっているため、ここに置く。
+                  静的なページなので、開いても会場の回線には流れない。
+                */}
+                <Link
+                  href="/guide"
+                  aria-label="遊び方を見る"
+                  className="tap-target -my-2 flex items-center justify-center text-muted-foreground"
+                >
+                  <HelpCircle className="h-5 w-5" aria-hidden />
+                </Link>
+              </div>
             </div>
             <div className="mt-2 flex items-center justify-between gap-2 text-xs">
               <div className="min-w-0">

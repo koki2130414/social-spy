@@ -168,7 +168,24 @@ export async function loginParticipant(
   }
 
   await setParticipantSession(participant.id, event.id);
+  await noteEntered(participant.id);
   return { eventId: event.id, participantId: participant.id };
+}
+
+/**
+ * 「入れた」ことを記録する。
+ *
+ * 受付で、配ったQRをちゃんと読めた人を見分けるための印。
+ * これはあくまで運営の目印なので、書き込みに失敗しても
+ * ログインそのものは絶対に止めない。
+ * （列がまだ無いデータベースでも、当日ログインが落ちないようにするため）
+ */
+export async function noteEntered(participantId: string): Promise<void> {
+  try {
+    await getRepo().markParticipantEntered(participantId);
+  } catch (error) {
+    console.warn(`markParticipantEntered: ${String(error)}`);
+  }
 }
 
 /** 参加者画面が必要とする状態。他人の役割は絶対に含めない */
@@ -208,7 +225,8 @@ export async function getGameState(): Promise<ParticipantGameState> {
     repo.listAssignedMissions(me.id),
     repo.listNotifications(event.id),
     repo.listVotesByVoter(event.id, me.id),
-    repo.countParticipants(event.id),
+    // 欠席を除いた数を出す。投票画面に並ぶ候補の数と合わせるため
+    repo.countAttendingParticipants(event.id),
     needsPublicSpyMissions ? repo.listMissions(event.id) : Promise.resolve([]),
   ]);
 

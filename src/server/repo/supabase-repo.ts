@@ -59,6 +59,8 @@ function mapParticipant(r: Row): Participant {
     attending: (r.attending as boolean | null) ?? true,
     failedLoginCount: (r.failed_login_count as number | null) ?? 0,
     loginLockedUntil: (r.login_locked_until as string | null) ?? null,
+    // 列がまだ無いデータベースでも動くようにしておく（移行の前後で画面が落ちない）
+    enteredAt: (r.entered_at as string | null) ?? null,
     joinedAt: r.joined_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -380,6 +382,17 @@ export class SupabaseRepo implements Repo {
     return count ?? 0;
   }
 
+  /** 当日いる人数だけを数える。欠席にした人は除く */
+  async countAttendingParticipants(eventId: string): Promise<number> {
+    const { count, error } = await this.db
+      .from('participants')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', eventId)
+      .eq('attending', true);
+    if (error) throw new Error(`countAttendingParticipants: ${error.message}`);
+    return count ?? 0;
+  }
+
   async findParticipantByName(eventId: string, displayName: string): Promise<Participant | null> {
     const { data, error } = await this.db
       .from('participants')
@@ -434,6 +447,15 @@ export class SupabaseRepo implements Repo {
       .select('*')
       .single();
     return mapParticipant(unwrap(data, error, 'setParticipantAttendance'));
+  }
+
+  async markParticipantEntered(participantId: string): Promise<void> {
+    // すでに記録があれば書き換えない。最初に入れた時刻を残したいため
+    await this.db
+      .from('participants')
+      .update({ entered_at: new Date().toISOString() })
+      .eq('id', participantId)
+      .is('entered_at', null);
   }
 
   async setParticipantDisplayName(

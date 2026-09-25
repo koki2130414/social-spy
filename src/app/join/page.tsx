@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, BookOpen } from 'lucide-react';
 import { SpyLogo } from '@/components/spy/logo';
 import { JoinPanel } from './join-panel';
 
@@ -44,7 +44,17 @@ export default async function JoinPage({
       <p className="mt-6 text-center text-xs text-muted-foreground">
         QRコードから開いた場合はコードが自動入力されます。
       </p>
-      <p className="mt-2 text-center text-xs">
+      {/* 受付で待っているあいだに読めるように */}
+      <p className="mt-4 text-center">
+        <Link
+          href="/guide"
+          className="tap-target headline-mono inline-flex items-center justify-center gap-2 rounded-sm border border-border px-5 text-sm text-foreground"
+        >
+          <BookOpen className="h-4 w-4" aria-hidden />
+          遊び方を見る
+        </Link>
+      </p>
+      <p className="mt-3 text-center text-xs">
         <Link href="/" className="text-muted-foreground underline underline-offset-4">
           トップへ戻る
         </Link>

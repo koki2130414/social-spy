@@ -39,7 +39,7 @@ import {
 import { useAdmin } from '@/components/spy/admin-shell';
 import { useAdminResource } from '@/hooks/use-admin-resource';
 import { apiGet, apiSend, ApiError } from '@/lib/api';
-import { formatDateTime } from '@/lib/datetime';
+import { formatDateTime, formatTime } from '@/lib/datetime';
 import type { ParticipantRole } from '@/lib/types';
 import { downloadBlob, downloadTextFile } from '@/lib/download-csv';
 import { buildParticipantsCsv } from './participants-csv';
@@ -58,6 +58,8 @@ interface Row {
   issuedPassword: string | null;
   /** 当日その人が来ているか。false は運営が欠席にした人 */
   attending: boolean;
+  /** 最初にアプリへ入れた時刻。null なら、まだ一度も入れていない */
+  enteredAt: string | null;
   joinedAt: string;
   joinUrl: string;
 }
@@ -95,6 +97,7 @@ export default function AdminParticipantsPage() {
   const [roleFilter, setRoleFilter] = useState<'ALL' | ParticipantRole>('ALL');
   const [voteFilter, setVoteFilter] = useState<'ALL' | 'VOTED' | 'NOT_VOTED'>('ALL');
   const [attendFilter, setAttendFilter] = useState<'ALL' | 'PRESENT' | 'ABSENT'>('ALL');
+  const [enterFilter, setEnterFilter] = useState<'ALL' | 'ENTERED' | 'NOT_ENTERED'>('ALL');
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmAuto, setConfirmAuto] = useState(false);
@@ -158,6 +161,8 @@ export default function AdminParticipantsPage() {
       if (voteFilter === 'NOT_VOTED' && p.hasVoted) return false;
       if (attendFilter === 'PRESENT' && !p.attending) return false;
       if (attendFilter === 'ABSENT' && p.attending) return false;
+      if (enterFilter === 'ENTERED' && !p.enteredAt) return false;
+      if (enterFilter === 'NOT_ENTERED' && p.enteredAt) return false;
       return true;
     });
     // 受付では番号で探すので番号順。番号以外のIDは後ろへ回す
@@ -171,11 +176,13 @@ export default function AdminParticipantsPage() {
       if (bNum) return 1;
       return a.joinedAt.localeCompare(b.joinedAt);
     });
-  }, [data, query, roleFilter, voteFilter, attendFilter]);
+  }, [data, query, roleFilter, voteFilter, attendFilter, enterFilter]);
 
   const all = data?.participants ?? [];
   const presentCount = all.filter((p) => p.attending).length;
   const absentCount = all.length - presentCount;
+  // 受付でいちばん見たい数字。出席にしている人のうち、実際に入れた人
+  const enteredCount = all.filter((p) => p.attending && p.enteredAt).length;
 
   if (!eventId) {
     return <p className="text-sm text-muted-foreground">イベントを選択してください。</p>;
@@ -407,6 +414,17 @@ export default function AdminParticipantsPage() {
               </>
             ) : null}
           </p>
+          <p className="mt-1 text-xs">
+            <span className="text-muted-foreground">入場（QRを読めた人）</span>{' '}
+            <span className="font-mono text-base text-intel">{enteredCount}</span>
+            <span className="text-muted-foreground"> / {presentCount} 名</span>
+            {presentCount - enteredCount > 0 ? (
+              <span className="text-muted-foreground">
+                {' '}
+                ・まだ {presentCount - enteredCount} 名
+              </span>
+            ) : null}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -618,6 +636,19 @@ export default function AdminParticipantsPage() {
             <option value="ABSENT">欠席のみ</option>
           </select>
         </div>
+        <div className="space-y-1">
+          <Label htmlFor="enter">入場フィルター</Label>
+          <select
+            id="enter"
+            value={enterFilter}
+            onChange={(e) => setEnterFilter(e.target.value as typeof enterFilter)}
+            className="min-h-[48px] w-full rounded-sm border border-input bg-background px-3 text-sm"
+          >
+            <option value="ALL">すべて</option>
+            <option value="ENTERED">入場済みのみ</option>
+            <option value="NOT_ENTERED">まだ入っていない人のみ</option>
+          </select>
+        </div>
       </div>
 
       {loading && !data ? (
@@ -648,6 +679,7 @@ export default function AdminParticipantsPage() {
                   </span>
                 </TableHead>
                 <TableHead>所属・肩書き</TableHead>
+                <TableHead>入場</TableHead>
                 <TableHead>出欠</TableHead>
                 <TableHead>役割</TableHead>
                 <TableHead>MISSION</TableHead>
@@ -687,6 +719,18 @@ export default function AdminParticipantsPage() {
                     )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{p.affiliation ?? '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {p.enteredAt ? (
+                      <span className="inline-flex flex-col">
+                        <Badge variant="intel">入場済み</Badge>
+                        <span className="mt-1 font-mono text-[10px] text-muted-foreground">
+                          {formatTime(p.enteredAt)}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">まだ</span>
+                    )}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap">
                     {p.attending ? (
                       <Badge variant="outline">出席</Badge>
