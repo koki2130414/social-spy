@@ -125,6 +125,7 @@ export function buildDemoDataset(): DemoDataset {
     attending: true,
     failedLoginCount: 0,
     loginLockedUntil: null,
+    enteredAt: null,
     loginId: null,
     joinedAt: iso(-25 + i),
     createdAt: iso(-25 + i),
