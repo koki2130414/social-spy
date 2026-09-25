@@ -90,8 +90,16 @@ export interface Repo {
   getParticipant(id: string): Promise<Participant | null>;
   /** 機密（role を含む）。管理者権限を確認した後にのみ呼ぶこと */
   listParticipants(eventId: string): Promise<Participant[]>;
-  /** 人数だけを数える。参加者の行を運ばないので、画面の定期更新から呼べる */
+  /** 登録されている人数（欠席も含む）。行を運ばないので、画面の定期更新から呼べる */
   countParticipants(eventId: string): Promise<number>;
+  /**
+   * 当日いる人数（欠席を除く）。
+   *
+   * 参加者の画面に出す「参加者 N名」と、投票で選べる人数はここに合わせる。
+   * 欠席込みの数を出すと、投票画面の候補と数が合わず
+   * 「1人足りない、誰か隠れている」と受け取られる。
+   */
+  countAttendingParticipants(eventId: string): Promise<number>;
   findParticipantByName(eventId: string, displayName: string): Promise<Participant | null>;
   findParticipantByLoginId(eventId: string, loginId: string): Promise<Participant | null>;
   /**
@@ -122,6 +130,14 @@ export interface Repo {
    * 配ったカードはそのまま使える（刷り直しは要らない）。
    */
   setParticipantDisplayName(participantId: string, displayName: string): Promise<Participant>;
+  /**
+   * 最初に入れた時刻を記録する。すでに記録があれば何もしない。
+   *
+   * 受付で「配ったQRを読めた人」を見分けるための印。
+   * ログインの流れに割り込ませるので、ここが失敗しても
+   * ログインそのものは止めないこと（呼び出し側で握りつぶす）。
+   */
+  markParticipantEntered(participantId: string): Promise<void>;
   /**
    * ログインの試行回数と一時停止の記録を書き換える。
    * パスワードの総当たりを止めるために使う。

@@ -239,6 +239,7 @@ export class DemoRepo implements Repo {
       attending: true,
       failedLoginCount: 0,
       loginLockedUntil: null,
+      enteredAt: null,
       joinedAt: now(),
       createdAt: now(),
       updatedAt: now(),
@@ -294,6 +295,10 @@ export class DemoRepo implements Repo {
     return state().participants.filter((p) => p.eventId === eventId).length;
   }
 
+  async countAttendingParticipants(eventId: string): Promise<number> {
+    return state().participants.filter((p) => p.eventId === eventId && p.attending).length;
+  }
+
   async findParticipantByName(eventId: string, displayName: string): Promise<Participant | null> {
     return (
       state().participants.find(
@@ -331,6 +336,12 @@ export class DemoRepo implements Repo {
     p.attending = attending;
     p.updatedAt = now();
     return p;
+  }
+
+  async markParticipantEntered(participantId: string): Promise<void> {
+    const p = state().participants.find((x) => x.id === participantId);
+    // すでに記録があれば書き換えない。最初に入れた時刻を残したいため
+    if (p && !p.enteredAt) p.enteredAt = now();
   }
 
   async setParticipantDisplayName(
