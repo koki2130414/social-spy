@@ -34,7 +34,15 @@ export function ServiceWorkerRegister() {
         if (connection?.effectiveType && /(^|-)2g$/.test(connection.effectiveType)) return;
         navigator.serviceWorker.controller?.postMessage({
           type: 'WARM_ROUTES',
-          urls: ['/game', '/game/missions', '/game/ranking', '/game/vote', '/game/result'],
+          // 遊び方は最後。ゲームの画面を先に確保する
+          urls: [
+            '/game',
+            '/game/missions',
+            '/game/ranking',
+            '/game/vote',
+            '/game/result',
+            '/guide',
+          ],
         });
       }, 60000);
     };
