@@ -145,6 +145,50 @@ export default function GuidePage() {
         </p>
       </header>
 
+      {/*
+        配ったガイドそのもの。
+        PDFのまま埋め込むと、iPhone では表示できない場合があるうえ、
+        1.7MB を人数ぶん流すことになる。画像にして 147KB まで落としてある。
+        小さくて読めない人のために、タップで大きい版（231KB）を開く。
+        大きい版とPDFは、タップした人の端末だけが取りに行く。
+      */}
+      <section className="mt-8">
+        <h2 className="headline-mono text-sm text-foreground">
+          ゲームガイド <span className="label-mono ml-1">Official</span>
+        </h2>
+
+        <a
+          href="/guide/guide-full.webp"
+          className="mt-3 block overflow-hidden rounded-sm border border-border bg-white"
+        >
+          {/* next/image を使わない。読み込みに JS を挟まず、電波が細くても出るようにする */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/guide/guide.webp"
+            alt="Social Spy ゲームガイド。2つの陣営、ゲームの流れ、アプリでできること、景品。詳しい内容はこの下に文字でも載せています。"
+            width={1240}
+            height={1755}
+            className="h-auto w-full"
+          />
+        </a>
+
+        <p className="mt-2 text-xs text-muted-foreground">
+          画像をタップすると大きく表示できます（指で広げても拡大できます）。
+        </p>
+        <p className="mt-1 text-xs">
+          <a
+            href="/guide/social-spy-guide.pdf"
+            className="text-muted-foreground underline underline-offset-4"
+          >
+            PDFで開く / ダウンロード
+          </a>
+        </p>
+      </section>
+
+      <div className="hairline mt-8" />
+
+      <p className="label-mono mt-8">以下、同じ内容を文字で</p>
+
       {/* 2つの陣営 */}
       <section className="mt-8">
         <h2 className="headline-mono text-sm text-foreground">

@@ -18,6 +18,19 @@ import { MAX_VOTE_TARGETS } from '@/lib/core/vote';
  */
 
 describe('遊び方のページ', () => {
+  it('配ったガイドそのものが載っている', () => {
+    render(<GuidePage />);
+    // 画像が出ないと「遊び方が見られない」になるので、道筋を固定する
+    const img = screen.getByRole('img', { name: /ゲームガイド/ });
+    expect(img).toHaveAttribute('src', '/guide/guide.webp');
+    // 小さくて読めない人が大きくできること
+    expect(img.closest('a')).toHaveAttribute('href', '/guide/guide-full.webp');
+    expect(screen.getByRole('link', { name: /PDFで開く/ })).toHaveAttribute(
+      'href',
+      '/guide/social-spy-guide.pdf',
+    );
+  });
+
   it('ログインしていなくても、そのまま表示できる', () => {
     // 引数も文脈も渡さずに描ける＝参加情報を必要としていない
     expect(() => render(<GuidePage />)).not.toThrow();
