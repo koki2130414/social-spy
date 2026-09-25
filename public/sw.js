@@ -54,6 +54,8 @@ function isAsset(url) {
     url.pathname.startsWith('/_next/static/') ||
     url.pathname.startsWith('/icons/') ||
     url.pathname.startsWith('/screenshots/') ||
+    // 遊び方のガイド画像。一度取れば電波が切れても見られるようにする
+    url.pathname.startsWith('/guide/') ||
     url.pathname === '/manifest.webmanifest'
   );
 }
